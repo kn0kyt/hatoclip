@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Hatoclip</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="header">
+    <h1>Hatoclip</h1>
+    <p id="status" class="status" role="status">接続を確認しています…</p>
+  </header>
+
+  <main>
+    <p id="no-key" class="notice" hidden>PCのQRコードを読み取ってください</p>
+
+    <section class="card">
+      <h2>PC → スマホ</h2>
+      <button id="fetch-btn" type="button" class="btn">PCのクリップボードを取得</button>
+      <textarea id="fetched" class="text" rows="5" readonly placeholder="ここにPCのクリップボードが表示されます"></textarea>
+      <button id="copy-btn" type="button" class="btn btn-secondary" disabled>コピー</button>
+      <p id="fetch-msg" class="msg" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>スマホ → PC</h2>
+      <textarea id="send-text" class="text text-large" rows="8" placeholder="ここに貼り付けて「PCに送信」"></textarea>
+      <button id="send-btn" type="button" class="btn">PCに送信</button>
+      <p id="send-msg" class="msg" role="status"></p>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

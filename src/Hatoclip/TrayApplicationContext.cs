@@ -71,10 +71,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _monitor.Changed += OnConnectionChanged;
         _server.TextReceived += OnTextReceived;
 
-        if (AutoStart.IsStale())
-        {
-            Log.Warn("Autostart entry points to a different exe path; it will be rewritten when autostart is turned on again.");
-        }
+        UpdateStaleAutoStart();
 
         if (!_config.Current.FirstRunShown)
         {
@@ -183,6 +180,23 @@ public sealed class TrayApplicationContext : ApplicationContext
         }
 
         _autoStartItem.Checked = SafeIsAutoStartEnabled();
+    }
+
+    /// <summary>Autostart is on but points at an old exe location (the exe was moved): re-point it here.</summary>
+    private static void UpdateStaleAutoStart()
+    {
+        try
+        {
+            if (AutoStart.IsStale())
+            {
+                AutoStart.Enable();
+                Log.Info("Autostart entry pointed to a different exe path; updated it to the current exe.");
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            Log.Warn($"Could not update the stale autostart entry ({ex.GetType().Name}).");
+        }
     }
 
     private static bool SafeIsAutoStartEnabled()

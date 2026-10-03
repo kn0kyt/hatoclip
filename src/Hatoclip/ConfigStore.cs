@@ -22,6 +22,12 @@ public sealed class ConfigStore
     public bool IsFirstRun { get; private set; }
 
     /// <summary>
+    /// Full path of the backup made when <see cref="Load"/> found an unparsable config file and
+    /// replaced it with a fresh one (new key); null otherwise.
+    /// </summary>
+    public string? CorruptBackupPath { get; private set; }
+
+    /// <summary>
     /// The current connection key. The server reads it on every API request, so a regenerated key
     /// takes effect immediately without a restart.
     /// </summary>
@@ -44,15 +50,23 @@ public sealed class ConfigStore
             var missingKeys = false;
             if (File.Exists(_path))
             {
+                // I/O errors propagate (Program reports them); only a file that was read but cannot
+                // be parsed is replaced, after keeping a copy so nothing is silently lost.
+                var json = File.ReadAllText(_path);
                 try
                 {
-                    var json = File.ReadAllText(_path);
                     loaded = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions);
                     missingKeys = loaded is not null && HasMissingShortcutKeys(json);
                 }
-                catch (Exception ex)
+                catch (JsonException ex)
                 {
-                    Log.Error($"Config file is unreadable; regenerating ({ex.GetType().Name}).");
+                    Log.Error($"Config file cannot be parsed ({ex.GetType().Name}).");
+                }
+
+                if (loaded is null)
+                {
+                    CorruptBackupPath = BackUpCorruptFile();
+                    Log.Warn($"Backed up the unparsable config file to {Path.GetFileName(CorruptBackupPath)}; creating a new config.");
                 }
             }
             else
@@ -127,6 +141,24 @@ public sealed class ConfigStore
         var root = doc.RootElement;
         return root.ValueKind == JsonValueKind.Object
             && (!root.TryGetProperty("shortcutSendUrl", out _) || !root.TryGetProperty("shortcutReceiveUrl", out _));
+    }
+
+    /// <summary>
+    /// Moves the config file to config.json.bak, or config.yyyyMMdd-HHmmss.bak if that already
+    /// exists. Throws if the file cannot be moved, so it is never overwritten.
+    /// </summary>
+    private string BackUpCorruptFile()
+    {
+        var dir = Path.GetDirectoryName(_path)!;
+        var backup = _path + ".bak";
+        if (File.Exists(backup))
+        {
+            var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            backup = Path.Combine(dir, $"{Path.GetFileNameWithoutExtension(_path)}.{stamp}.bak");
+        }
+
+        File.Move(_path, backup);
+        return backup;
     }
 
     private static bool IsValidKey(string? key) => !string.IsNullOrWhiteSpace(key) && key.Length >= 32;

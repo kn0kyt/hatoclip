@@ -24,6 +24,7 @@ internal static class Program
         };
 
         Log.Info($"Hatoclip {Application.ProductVersion} starting.");
+        Log.DeleteOldFiles();
 
         var config = new ConfigStore(AppPaths.ConfigFile);
         try
@@ -60,6 +61,15 @@ internal static class Program
         {
             using var context = new TrayApplicationContext(config, server, ui, rateLimiter);
             instance.Listen(() => ui.Post(context.ShowQrWindow));
+            if (config.CorruptBackupPath is { } backup)
+            {
+                // Posted after the first-run QR window (a fresh config has not shown it yet).
+                ui.Post(() => MessageBox.Show(
+                    "設定ファイルが壊れていたため、新しい設定を作成しました。接続キーが変わったので、スマホで QR コードを読み直してください。" +
+                    $"（元のファイルは {Path.GetFileName(backup)} として残しています）",
+                    "Hatoclip", MessageBoxButtons.OK, MessageBoxIcon.Warning));
+            }
+
             Application.Run(context);
         }
         finally
@@ -70,6 +80,7 @@ internal static class Program
             }
 
             Log.Info("Hatoclip exiting.");
+            Log.Close();
         }
 
         return 0;

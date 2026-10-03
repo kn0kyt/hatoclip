@@ -15,17 +15,10 @@ public sealed class ClipboardService
         _ui = ui;
     }
 
+    /// <summary>Sets non-empty text (Clipboard.SetText rejects an empty string).</summary>
     public Task SetTextAsync(string text) => WithRetryAsync(() =>
     {
-        if (text.Length == 0)
-        {
-            Clipboard.Clear();
-        }
-        else
-        {
-            Clipboard.SetText(text, TextDataFormat.UnicodeText);
-        }
-
+        Clipboard.SetText(text, TextDataFormat.UnicodeText);
         return true;
     });
 

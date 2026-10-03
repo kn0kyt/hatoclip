@@ -192,6 +192,9 @@ h3 { font-size: 0.95rem; margin: 8px 0 0; }
 .msg.ok { color: var(--ok); }
 .msg.error { color: var(--error); }
 
+/* setMsg() rewrites className, so this targets the id. */
+#notice:not(:empty) { margin: -8px 0 16px; }
+
 .msg.delivered { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .msg-icon { width: 28px; height: 28px; flex: none; animation: fly-in 0.6s ease-out; }
 

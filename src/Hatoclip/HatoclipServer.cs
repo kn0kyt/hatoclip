@@ -30,6 +30,14 @@ public sealed class HatoclipServer : IAsyncDisposable
     };
 
     private const string Html = "text/html; charset=utf-8";
+
+    /// <summary>
+    /// CSP for the page. Scripts come only from /app.js. 'unsafe-inline' for styles is needed for the
+    /// style="fill: var(...)" attributes of the inline SVG pigeon sprite (presentation attributes
+    /// cannot use CSS variables, and styling &lt;use&gt; clones from style.css is unreliable).
+    /// </summary>
+    private const string ContentSecurityPolicy =
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
     private const string Png = "image/png";
 
     /// <summary>
@@ -88,7 +96,7 @@ public sealed class HatoclipServer : IAsyncDisposable
             {
                 await app.StartAsync().ConfigureAwait(false);
             }
-            catch (IOException ex)
+            catch (Exception ex) when (IsBindFailure(ex))
             {
                 lastError = ex;
                 Log.Warn($"Port {port} is unavailable ({ex.GetBaseException().Message}); trying next port.");
@@ -101,7 +109,7 @@ public sealed class HatoclipServer : IAsyncDisposable
             if (port != firstPort)
             {
                 _config.Update(c => c.Port = port);
-                Log.Info($"Configured port {firstPort} was in use; saved port {port} to config.");
+                Log.Info($"Configured port {firstPort} was unavailable; saved port {port} to config.");
             }
 
             Log.Info($"Server started on 0.0.0.0:{port}.");
@@ -110,6 +118,14 @@ public sealed class HatoclipServer : IAsyncDisposable
 
         throw new IOException($"No free port in range {firstPort}-{lastPort}.", lastError);
     }
+
+    /// <summary>
+    /// A port that cannot be bound: in use (Kestrel wraps that in an IOException) or refused by the
+    /// OS, e.g. access denied (WSAEACCES) for a port in a Hyper-V/WSL/Docker excluded port range.
+    /// Anything else (configuration errors etc.) is not a bind failure and must fail startup.
+    /// </summary>
+    private static bool IsBindFailure(Exception ex) =>
+        ex is IOException or SocketException || ex.GetBaseException() is SocketException;
 
     public async Task StopAsync()
     {
@@ -155,7 +171,8 @@ public sealed class HatoclipServer : IAsyncDisposable
         builder.WebHost.ConfigureKestrel(options =>
         {
             options.AddServerHeader = false;
-            options.ListenAnyIP(port);
+            // IPv4 only (SPEC 3.4: 0.0.0.0). ListenAnyIP would bind [::] dual-mode and also accept IPv6.
+            options.Listen(IPAddress.Any, port);
         });
 
         // Bind with SO_EXCLUSIVEADDRUSE so that (a) a port already held by another process reliably
@@ -165,14 +182,23 @@ public sealed class HatoclipServer : IAsyncDisposable
 
         var app = builder.Build();
 
+        // WebApplication runs routing before this pipeline, so the middleware below can see the
+        // matched endpoint and its metadata.
         app.Use(LogRequestsAsync);
+        app.Use(AddSecurityHeadersAsync);
         app.Use(HandleErrorsAsync);
         app.Use(AuthenticateAsync);
 
         app.MapMethods("/{**path}", ["GET", "HEAD"], (Delegate)ServeStatic);
-        app.MapGet("/api/ping", Ping);
-        app.MapPost("/api/clipboard", (Delegate)PostClipboardAsync);
-        app.MapGet("/api/clipboard", GetClipboardAsync);
+
+        // Every endpoint in this group requires the key (see AuthenticateAsync), including ones
+        // added later. The catch-all answers unknown /api paths with 404 only after authentication,
+        // so a client without the key gets 401 for every /api path and cannot probe which exist.
+        var api = app.MapGroup("/api").WithMetadata(RequiresKey.Instance);
+        api.MapGet("/ping", Ping);
+        api.MapPost("/clipboard", (Delegate)PostClipboardAsync);
+        api.MapGet("/clipboard", GetClipboardAsync);
+        api.Map("/{**rest}", () => Json(404, new { ok = false, error = "not-found" }));
 
         return app;
     }
@@ -216,11 +242,6 @@ public sealed class HatoclipServer : IAsyncDisposable
         var socket = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         try
         {
-            if (ip.Address.Equals(IPAddress.IPv6Any))
-            {
-                socket.DualMode = true; // same as Kestrel's default: [::] also accepts IPv4
-            }
-
             socket.ExclusiveAddressUse = true;
             socket.Bind(ip);
             return socket;
@@ -264,36 +285,71 @@ public sealed class HatoclipServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Security headers on every response, added just before the headers are sent so that they
+    /// survive HandleErrorsAsync clearing the response.
+    /// </summary>
+    private static Task AddSecurityHeadersAsync(HttpContext ctx, RequestDelegate next)
+    {
+        ctx.Response.OnStarting(() =>
+        {
+            var headers = ctx.Response.Headers;
+            headers.XContentTypeOptions = "nosniff";
+            headers["Referrer-Policy"] = "no-referrer";
+            headers.ContentSecurityPolicy = ContentSecurityPolicy;
+            if (ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
+            {
+                headers.CacheControl = "no-store";
+            }
+
+            return Task.CompletedTask;
+        });
+        return next(ctx);
+    }
+
+    /// <summary>
+    /// Key check for endpoints carrying <see cref="RequiresKey"/> (the /api group). The key is
+    /// checked first, so a phone with the right key always gets through, even while its IP is
+    /// blocked because of wrong guesses from the same address (the block itself stays for wrong keys).
+    /// </summary>
     private async Task AuthenticateAsync(HttpContext ctx, RequestDelegate next)
     {
-        if (!ctx.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
+        if (ctx.GetEndpoint()?.Metadata.GetMetadata<RequiresKey>() is null)
         {
             await next(ctx);
             return;
         }
 
+        // There is no CORS support: OPTIONS (e.g. a browser preflight) gets a bare 204 without CORS
+        // headers, so a cross-origin request still fails. It is never counted as an auth failure.
+        if (HttpMethods.IsOptions(ctx.Request.Method))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status204NoContent;
+            return;
+        }
+
         var ip = ctx.Connection.RemoteIpAddress;
+        if (IsValidKey(ctx.Request.Headers[KeyHeader].ToString()))
+        {
+            _rateLimiter.RecordSuccess(ip);
+            await next(ctx);
+            return;
+        }
+
         if (_rateLimiter.IsBlocked(ip))
         {
             await Json(429, new { ok = false, error = "too-many-requests" }).ExecuteAsync(ctx);
             return;
         }
 
-        if (!IsValidKey(ctx.Request.Headers[KeyHeader].ToString()))
+        var nowBlocked = _rateLimiter.RecordFailure(ip);
+        Log.Warn($"Auth failure from {RemoteIp(ctx)} on {ctx.Request.Path}.");
+        if (nowBlocked)
         {
-            var nowBlocked = _rateLimiter.RecordFailure(ip);
-            Log.Warn($"Auth failure from {RemoteIp(ctx)} on {ctx.Request.Path}.");
-            if (nowBlocked)
-            {
-                Log.Warn($"Blocking {RemoteIp(ctx)} for {AuthRateLimiter.BlockDuration.TotalMinutes:0} minutes after repeated auth failures.");
-            }
-
-            await Json(401, new { ok = false, error = "unauthorized" }).ExecuteAsync(ctx);
-            return;
+            Log.Warn($"Blocking {RemoteIp(ctx)} for {AuthRateLimiter.BlockDuration.TotalMinutes:0} minutes after repeated auth failures.");
         }
 
-        _rateLimiter.RecordSuccess(ip);
-        await next(ctx);
+        await Json(401, new { ok = false, error = "unauthorized" }).ExecuteAsync(ctx);
     }
 
     private bool IsValidKey(string supplied)
@@ -365,6 +421,12 @@ public sealed class HatoclipServer : IAsyncDisposable
         {
             // text/plain (and anything else that is not JSON) is treated as raw UTF-8 text.
             text = DecodeUtf8(body);
+        }
+
+        // An empty body must not wipe the PC clipboard (e.g. a Shortcut run with an empty clipboard).
+        if (text.Length == 0)
+        {
+            return Json(400, new { ok = false, error = "empty" });
         }
 
         try
@@ -462,5 +524,11 @@ public sealed class HatoclipServer : IAsyncDisposable
         }
 
         return (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip).ToString();
+    }
+
+    /// <summary>Endpoint metadata: the request must carry the connection key.</summary>
+    private sealed class RequiresKey
+    {
+        public static readonly RequiresKey Instance = new();
     }
 }

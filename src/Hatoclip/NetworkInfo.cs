@@ -39,8 +39,11 @@ public static class NetworkInfo
         "Wintun", "WireGuard", "OpenVPN", "Bluetooth", "Npcap", "Loopback", "Wi-Fi Direct",
     ];
 
-    /// <summary>The machine's mDNS name, e.g. "my-pc.local".</summary>
-    public static string LocalHostName => Environment.MachineName.ToLowerInvariant() + ".local";
+    /// <summary>
+    /// The machine's mDNS name, e.g. "my-pc.local". Uses the DNS host name: MachineName is the NetBIOS
+    /// name, which is truncated to 15 characters.
+    /// </summary>
+    public static string LocalHostName => GetHostName().ToLowerInvariant() + ".local";
 
     /// <summary>Picks the best LAN IPv4: has gateway &gt; physical type (Ethernet/Wi-Fi) &gt; preferred by the routing table.</summary>
     public static LanSelection SelectLanAddress()
@@ -117,6 +120,24 @@ public static class NetworkInfo
             .ThenByDescending(c => c.IsBestRoute)
             .ToList();
         return new LanSelection(ordered.FirstOrDefault(), ordered, excluded);
+    }
+
+    private static string GetHostName()
+    {
+        try
+        {
+            var name = Dns.GetHostName();
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+        }
+        catch (SocketException ex)
+        {
+            Log.Warn($"Could not get the host name ({ex.SocketErrorCode}); using the NetBIOS name.");
+        }
+
+        return Environment.MachineName;
     }
 
     public static string BuildConnectUrl(string host, int port, string key) => $"http://{host}:{port}/#k={key}";

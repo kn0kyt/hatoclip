@@ -34,6 +34,7 @@
     pasteDenied: 'クリップボードの読み取りが許可されませんでした',
     keyEmpty: '接続キーを貼り付けてください',
     keyChecking: '確認中…',
+    scannedKeyMismatch: '読み取ったQRコードの接続キーは、このPCのものと一致しませんでした。現在の接続をそのまま使います',
     comingSoon: '（準備中）'
   };
 
@@ -68,15 +69,30 @@
     return s;
   }
 
-  // Saves a key handed over in the URL fragment (#k=…) and removes the fragment from the
-  // address bar and history. Returns true when a key was found.
+  // Reads a key handed over in the URL fragment (#k=…) and immediately removes the fragment from
+  // the address bar and history. Returns the key, or '' when there is none.
   function takeKeyFromHash() {
     var hash = location.hash.replace(/^#/, '');
-    if (!hash) return false;
-    var k = new URLSearchParams(hash).get('k');
-    if (k) saveKey(k);
+    if (!hash) return '';
     history.replaceState(null, '', location.pathname + location.search);
-    return !!k;
+    return new URLSearchParams(hash).get('k') || '';
+  }
+
+  // Adopts a key from a scanned QR code / link. A link must not be able to break a working
+  // connection, so a key that differs from the stored one is saved only after the PC accepts it.
+  // Resolves when done; on a mismatch the old key is kept and a notice is shown. On any other
+  // failure (e.g. PC unreachable) the old key is kept and the normal connect flow reports it.
+  function adoptScannedKey(k) {
+    var current = getKey();
+    setMsg($('notice'), '');
+    if (!current || current === k) {
+      saveKey(k);
+      return Promise.resolve();
+    }
+    return api('GET', '/api/ping', undefined, k).then(function (r) {
+      if (isOk(r)) saveKey(k);
+      else if (r.status === 401) setMsg($('notice'), MSG.scannedKeyMismatch);
+    });
   }
 
   // ---- UI helpers -------------------------------------------------------------------------
@@ -145,10 +161,11 @@
   // ---- API --------------------------------------------------------------------------------
 
   // Resolves to { status, body }. status 0 = network error / timeout.
-  function api(method, path, payload) {
+  // `key` overrides the stored key (used to check a new key before saving it).
+  function api(method, path, payload, key) {
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timer = controller ? setTimeout(function () { controller.abort(); }, TIMEOUT_MS) : null;
-    var headers = { 'X-Hatoclip-Key': getKey() || '' };
+    var headers = { 'X-Hatoclip-Key': (key !== undefined ? key : getKey()) || '' };
     var opts = { method: method, headers: headers, cache: 'no-store' };
     if (controller) opts.signal = controller.signal;
     if (payload !== undefined) {
@@ -170,8 +187,10 @@
   function isOk(r) { return r.status === 200 && r.body && r.body.ok; }
 
   // Error text shared by all actions; `failed` is the action-specific text for other codes.
-  function errorMessage(status, failed) {
+  function errorMessage(r, failed) {
+    var status = r.status;
     if (status === 0) return MSG.offline;
+    if (status === 400 && r.body && r.body.error === 'empty') return MSG.empty;
     if (status === 401) return MSG.unauthorized;
     if (status === 403) return MSG.getDisabled;
     if (status === 413) return MSG.tooLarge;
@@ -243,11 +262,30 @@
       shake(input);
       return;
     }
-    saveKey(key);
-    input.value = '';
     input.blur();
     setMsg(msg, MSG.keyChecking);
-    ping().then(function () { setMsg(msg, ''); });
+
+    function useKey() {
+      saveKey(key);
+      input.value = '';
+      return ping().then(function () { setMsg(msg, ''); });
+    }
+
+    var current = getKey();
+    if (!current || current === key) {
+      useKey();
+      return;
+    }
+    // Replacing a stored key: check the pasted one first and say so if the PC rejects it (the
+    // stored key stays). If the PC cannot be reached, the user's explicit choice is saved.
+    api('GET', '/api/ping', undefined, key).then(function (r) {
+      if (r.status === 401 || r.status === 429) {
+        setMsg(msg, errorMessage(r, ''), 'error');
+        shake(input);
+        return;
+      }
+      return useKey();
+    });
   }
 
   // ---- PC → phone -------------------------------------------------------------------------
@@ -261,7 +299,7 @@
     setMsg(msg, MSG.fetching);
     api('GET', '/api/clipboard').then(function (r) {
       if (!isOk(r)) {
-        setMsg(msg, errorMessage(r.status, MSG.fetchFailed), 'error');
+        setMsg(msg, errorMessage(r, MSG.fetchFailed), 'error');
         return;
       }
       var text = r.body.text || '';
@@ -276,7 +314,9 @@
       autoGrow(out);
       out.scrollTop = 0;
       setMsg(msg, '');
-    }).then(function () { btn.disabled = false; });
+    }).then(done, done); // re-enable even if a handler above threw (no Promise#finally on old iOS)
+
+    function done() { btn.disabled = false; }
   }
 
   function copyFetched() {
@@ -305,12 +345,14 @@
         ta.value = '';
         setMsg(msg, MSG.sent, 'ok', true);
       } else {
-        setMsg(msg, errorMessage(r.status, MSG.sendFailed), 'error');
+        setMsg(msg, errorMessage(r, MSG.sendFailed), 'error');
       }
-    }).then(function () {
+    }).then(done, done); // re-enable even if a handler above threw (no Promise#finally on old iOS)
+
+    function done() {
       btn.disabled = false;
       btn.textContent = MSG.send;
-    });
+    }
   }
 
   // Only offered in a secure context (HTTPS); hidden on today's http page.
@@ -371,7 +413,7 @@
   function clearShake() { this.classList.remove('shake'); }
 
   function init() {
-    takeKeyFromHash();
+    var hashKey = takeKeyFromHash();
 
     $('reconnect-btn').addEventListener('click', ping);
     $('key-form').addEventListener('submit', saveKeyFromForm);
@@ -391,10 +433,13 @@
     $('conn-key-toggle').addEventListener('click', toggleKeyVisibility);
     $('conn-key-copy').addEventListener('click', function () { copyDetail(getKey()); });
 
-    // A new key scanned while the page is already open (same tab, new #k=…): overwrite and reconnect.
-    window.addEventListener('hashchange', function () { if (takeKeyFromHash()) ping(); });
+    // A key scanned while the page is already open (same tab, new #k=…): adopt it if valid, reconnect.
+    window.addEventListener('hashchange', function () {
+      var k = takeKeyFromHash();
+      if (k) adoptScannedKey(k).then(ping);
+    });
 
-    ping();
+    (hashKey ? adoptScannedKey(hashKey) : Promise.resolve()).then(ping);
   }
 
   init();

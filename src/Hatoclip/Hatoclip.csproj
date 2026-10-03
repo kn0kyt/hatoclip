@@ -9,8 +9,31 @@
     <AssemblyName>Hatoclip</AssemblyName>
     <RootNamespace>Hatoclip</RootNamespace>
     <ApplicationIcon>assets\hatoclip.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Version and metadata">
+    <Version>1.0.0</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <!-- Keep ProductVersion (and the startup log line) as plain "1.0.0", without a "+<git hash>" suffix. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Product>Hatoclip</Product>
-    <Version>0.1.0</Version>
+    <Company>Hatoclip</Company>
+    <Copyright>Copyright (c) 2026 Hatoclip</Copyright>
+    <Description>Hatoclip - LAN clipboard sharing between a phone and this PC</Description>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Publish (see Properties\PublishProfiles and tools\publish.ps1)">
+    <!-- Drop satellite resource assemblies of the framework; the UI strings are our own literals. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Single-file publish: bundle native libraries as well (no extraction folder), and compress the bundle. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- No trimming and no ReadyToRun: WinForms and ASP.NET Core are not trim-safe; R2R roughly doubles the size. -->
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

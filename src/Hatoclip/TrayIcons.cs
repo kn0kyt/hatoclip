@@ -1,24 +1,31 @@
 namespace Hatoclip;
 
 /// <summary>
-/// Tray icon images. The placeholder pigeon lives in assets/hatoclip.ico (embedded);
-/// replace that file to rebrand. Phase 2/3 can add a "just received" variant here.
+/// Tray icon images, embedded from assets/ (replace the .ico files to rebrand):
+/// hatoclip.ico (idle) and hatoclip-received.ico (shown for a few seconds after text arrives).
 /// </summary>
 public static class TrayIcons
 {
-    public static Icon LoadIdle()
+    public static Icon LoadIdle() => Load("hatoclip.ico", SystemInformation.SmallIconSize);
+
+    public static Icon LoadReceived() => Load("hatoclip-received.ico", SystemInformation.SmallIconSize);
+
+    /// <summary>Application icon for windows (title bar / taskbar).</summary>
+    public static Icon LoadWindowIcon() => Load("hatoclip.ico", new Size(32, 32));
+
+    private static Icon Load(string fileName, Size size)
     {
-        var bytes = EmbeddedAssets.GetTrayIconBytes();
+        var bytes = EmbeddedAssets.GetAsset(fileName);
         if (bytes is not null)
         {
             try
             {
                 using var ms = new MemoryStream(bytes);
-                return new Icon(ms, SystemInformation.SmallIconSize);
+                return new Icon(ms, size);
             }
             catch (Exception ex)
             {
-                Log.Warn($"Tray icon could not be loaded ({ex.GetType().Name}); using default icon.");
+                Log.Warn($"Icon {fileName} could not be loaded ({ex.GetType().Name}); using default icon.");
             }
         }
 

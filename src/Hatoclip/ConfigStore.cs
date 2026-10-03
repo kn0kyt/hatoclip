@@ -18,8 +18,23 @@ public sealed class ConfigStore
 
     public AppConfig Current { get; private set; } = new();
 
-    /// <summary>True when no config file existed (phase 2 uses this to auto-show the QR window).</summary>
+    /// <summary>True when no config file existed when <see cref="Load"/> ran.</summary>
     public bool IsFirstRun { get; private set; }
+
+    /// <summary>
+    /// The current connection key. The server reads it on every API request, so a regenerated key
+    /// takes effect immediately without a restart.
+    /// </summary>
+    public string Key
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return Current.Key;
+            }
+        }
+    }
 
     public void Load()
     {
@@ -73,6 +88,25 @@ public sealed class ConfigStore
         {
             change(Current);
             SaveLocked();
+        }
+    }
+
+    /// <summary>Replaces the connection key with a fresh random one and persists it.</summary>
+    public void RegenerateKey()
+    {
+        lock (_gate)
+        {
+            var previous = Current.Key;
+            Current.Key = GenerateKey();
+            try
+            {
+                SaveLocked();
+            }
+            catch
+            {
+                Current.Key = previous; // keep memory and disk consistent
+                throw;
+            }
         }
     }
 

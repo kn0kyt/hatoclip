@@ -20,8 +20,13 @@
   <ItemGroup>
     <!-- Web page served to the phone. Logical names: Hatoclip.Web.<file> -->
     <EmbeddedResource Include="Web\**\*" LogicalName="Hatoclip.Web.%(Filename)%(Extension)" />
-    <!-- Placeholder tray icon (replace assets\hatoclip.ico to rebrand). -->
-    <EmbeddedResource Include="assets\hatoclip.ico" LogicalName="Hatoclip.assets.hatoclip.ico" />
+    <!-- Tray icons: idle and "just received" (replace the files in assets\ to rebrand). -->
+    <EmbeddedResource Include="assets\*.ico" LogicalName="Hatoclip.assets.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- QR code generation for the connection window (MIT). -->
+    <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 
 </Project>

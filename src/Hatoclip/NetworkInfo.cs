@@ -1,38 +1,89 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace Hatoclip;
 
-/// <summary>
-/// LAN address discovery. Phase 1: basic pick. Phase 2 will add virtual-adapter filtering,
-/// change notifications and network diagnostics here.
-/// </summary>
+/// <summary>An IPv4 address on a usable (non-virtual, Up) network interface.</summary>
+public sealed record LanCandidate(
+    IPAddress Address,
+    string InterfaceId,
+    string InterfaceName,
+    string Description,
+    NetworkInterfaceType Type,
+    bool HasGateway,
+    bool IsPhysicalType,
+    bool IsBestRoute)
+{
+    public override string ToString() =>
+        $"{Address} on \"{InterfaceName}\" ({Type}, gateway={HasGateway}, bestRoute={IsBestRoute})";
+}
+
+/// <summary>Result of LAN address discovery: the chosen candidate plus diagnostics.</summary>
+public sealed record LanSelection(LanCandidate? Best, IReadOnlyList<LanCandidate> Candidates, IReadOnlyList<string> ExcludedInterfaces)
+{
+    public bool HasAddress => Best is not null;
+}
+
+/// <summary>LAN IPv4 discovery for the connection URL (SPEC 3.3).</summary>
 public static class NetworkInfo
 {
-    /// <summary>First non-loopback IPv4 of an Up interface that has an IPv4 default gateway (falls back to any Up IPv4).</summary>
-    public static IPAddress? GetLanIPv4()
+    /// <summary>
+    /// Interfaces whose name or description contains any of these (case-insensitive) are treated as
+    /// virtual / VPN adapters and never offered as the connection address. Extend as needed.
+    /// </summary>
+    public static readonly string[] VirtualAdapterKeywords =
+    [
+        "Hyper-V", "vEthernet", "WSL", "VirtualBox", "VMware", "TAP", "Tailscale", "ZeroTier",
+        "Wintun", "WireGuard", "OpenVPN", "Bluetooth", "Npcap", "Loopback", "Wi-Fi Direct",
+    ];
+
+    /// <summary>The machine's mDNS name, e.g. "my-pc.local".</summary>
+    public static string LocalHostName => Environment.MachineName.ToLowerInvariant() + ".local";
+
+    /// <summary>Picks the best LAN IPv4: has gateway &gt; physical type (Ethernet/Wi-Fi) &gt; preferred by the routing table.</summary>
+    public static LanSelection SelectLanAddress()
     {
         NetworkInterface[] interfaces;
         try
         {
             interfaces = NetworkInterface.GetAllNetworkInterfaces();
         }
-        catch (NetworkInformationException)
+        catch (NetworkInformationException ex)
         {
-            return null;
+            Log.Warn($"Could not enumerate network interfaces ({ex.Message}).");
+            return new LanSelection(null, [], []);
         }
 
-        IPAddress? fallback = null;
+        var bestRouteIndex = GetBestRouteInterfaceIndex();
+        var candidates = new List<LanCandidate>();
+        var excluded = new List<string>();
+
         foreach (var nic in interfaces)
         {
             if (nic.OperationalStatus != OperationalStatus.Up ||
-                nic.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel)
+                nic.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel or NetworkInterfaceType.Ppp)
             {
                 continue;
             }
 
-            var props = nic.GetIPProperties();
+            if (IsVirtualAdapter(nic))
+            {
+                excluded.Add(nic.Name);
+                continue;
+            }
+
+            IPInterfaceProperties props;
+            try
+            {
+                props = nic.GetIPProperties();
+            }
+            catch (NetworkInformationException)
+            {
+                continue;
+            }
+
             var address = props.UnicastAddresses
                 .Select(a => a.Address)
                 .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a) && !IsLinkLocal(a));
@@ -43,26 +94,67 @@ public static class NetworkInfo
 
             var hasGateway = props.GatewayAddresses.Any(g =>
                 g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any));
-            if (hasGateway)
+
+            var isBestRoute = false;
+            if (bestRouteIndex is { } best)
             {
-                return address;
+                try
+                {
+                    isBestRoute = props.GetIPv4Properties()?.Index == best;
+                }
+                catch (NetworkInformationException)
+                {
+                }
             }
 
-            fallback ??= address;
+            candidates.Add(new LanCandidate(address, nic.Id, nic.Name, nic.Description, nic.NetworkInterfaceType,
+                hasGateway, IsPhysicalType(nic.NetworkInterfaceType), isBestRoute));
         }
 
-        return fallback;
+        var ordered = candidates
+            .OrderByDescending(c => c.HasGateway)
+            .ThenByDescending(c => c.IsPhysicalType)
+            .ThenByDescending(c => c.IsBestRoute)
+            .ToList();
+        return new LanSelection(ordered.FirstOrDefault(), ordered, excluded);
     }
 
-    public static string BuildConnectUrl(IPAddress? ip, int port, string key)
-    {
-        var host = ip?.ToString() ?? Environment.MachineName + ".local";
-        return $"http://{host}:{port}/#k={key}";
-    }
+    public static string BuildConnectUrl(string host, int port, string key) => $"http://{host}:{port}/#k={key}";
+
+    private static bool IsVirtualAdapter(NetworkInterface nic) =>
+        VirtualAdapterKeywords.Any(k =>
+            nic.Name.Contains(k, StringComparison.OrdinalIgnoreCase) ||
+            nic.Description.Contains(k, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsPhysicalType(NetworkInterfaceType type) => type is
+        NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211 or NetworkInterfaceType.GigabitEthernet or
+        NetworkInterfaceType.FastEthernetT or NetworkInterfaceType.FastEthernetFx or NetworkInterfaceType.Ethernet3Megabit;
 
     private static bool IsLinkLocal(IPAddress ip)
     {
         var b = ip.GetAddressBytes();
         return b[0] == 169 && b[1] == 254;
     }
+
+    /// <summary>
+    /// Interface index the routing table would use for an off-link IPv4 destination (i.e. the default
+    /// route with the lowest metric). This is a local route-table lookup; no packet is sent.
+    /// .NET does not expose interface metrics directly, so this stands in for "lowest metric".
+    /// </summary>
+    private static int? GetBestRouteInterfaceIndex()
+    {
+        try
+        {
+            // 1.1.1.1 in network byte order, as a uint read little-endian.
+            var dest = BitConverter.ToUInt32([1, 1, 1, 1], 0);
+            return GetBestInterface(dest, out var index) == 0 ? (int)index : null;
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    [DllImport("iphlpapi.dll", ExactSpelling = true)]
+    private static extern int GetBestInterface(uint dwDestAddr, out uint pdwBestIfIndex);
 }

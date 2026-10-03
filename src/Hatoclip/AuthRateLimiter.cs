@@ -79,6 +79,9 @@ public sealed class AuthRateLimiter
         }
     }
 
+    /// <summary>Forgets all failure history and blocks (used after the connection key is regenerated).</summary>
+    public void Reset() => _entries.Clear();
+
     private static string Key(IPAddress? ip)
     {
         if (ip is null)

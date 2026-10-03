@@ -15,4 +15,8 @@ public sealed class AppConfig
 
     [JsonPropertyName("allowGet")]
     public bool AllowGet { get; set; } = true;
+
+    /// <summary>Set once the QR window has been shown automatically on first run.</summary>
+    [JsonPropertyName("firstRunShown")]
+    public bool FirstRunShown { get; set; }
 }

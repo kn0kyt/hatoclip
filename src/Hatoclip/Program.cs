@@ -2,17 +2,13 @@ namespace Hatoclip;
 
 internal static class Program
 {
-    // Per-session single-instance lock. Phase 2 will signal the running instance to show its QR window.
-    private const string MutexName = @"Local\Hatoclip-SingleInstance-7c1e2f4a";
-
     [STAThread]
     private static int Main()
     {
-        using var mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
-        if (!createdNew)
+        // A second instance asks the running one to show its QR window, then exits silently.
+        using var instance = SingleInstance.TryAcquire();
+        if (instance is null)
         {
-            ApplicationConfiguration.Initialize();
-            MessageBox.Show("Hatoclip はすでに起動しています。", "Hatoclip", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }
 
@@ -44,7 +40,8 @@ internal static class Program
 
         using var ui = new UiDispatcher();
         var clipboard = new ClipboardService(ui);
-        var server = new HatoclipServer(config, clipboard, new AuthRateLimiter());
+        var rateLimiter = new AuthRateLimiter();
+        var server = new HatoclipServer(config, clipboard, rateLimiter);
 
         try
         {
@@ -61,7 +58,8 @@ internal static class Program
 
         try
         {
-            using var context = new TrayApplicationContext(config, server, ui);
+            using var context = new TrayApplicationContext(config, server, ui, rateLimiter);
+            instance.Listen(() => ui.Post(context.ShowQrWindow));
             Application.Run(context);
         }
         finally

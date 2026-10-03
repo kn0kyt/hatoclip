@@ -261,7 +261,8 @@ public sealed class HatoclipServer : IAsyncDisposable
             return false;
         }
 
-        var expected = Encoding.UTF8.GetBytes(_config.Current.Key);
+        // Read per request (under the config lock) so a regenerated key applies without a restart.
+        var expected = Encoding.UTF8.GetBytes(_config.Key);
         var actual = Encoding.UTF8.GetBytes(supplied);
         return CryptographicOperations.FixedTimeEquals(expected, actual);
     }

@@ -4,33 +4,121 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4f6fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Hatoclip">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
   <title>Hatoclip</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- Pigeon mark: same silhouette as the tray icon and the PWA icons (48x48 grid). -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="pigeon" viewBox="0 0 48 48">
+      <g style="fill: var(--pigeon-body)">
+        <polygon points="13,30 2,35.5 4,37 10,37.5 18,37"/>
+        <ellipse cx="24" cy="29.5" rx="15" ry="10"/>
+        <path d="M30,10 Q23,17 14,23.5 L30,34 L38.5,27 Q41.5,23 41,19 Z"/>
+        <circle cx="35" cy="15.5" r="7.5"/>
+      </g>
+      <ellipse cx="24" cy="28" rx="9.8" ry="5" style="fill: var(--pigeon-wing)"/>
+      <polygon points="41.5,14.5 47,16.5 41.5,18.5" style="fill: var(--pigeon-beak)"/>
+      <circle cx="36.5" cy="14.5" r="2.4" style="fill: #ffffff"/>
+      <circle cx="37" cy="14.5" r="1" style="fill: #1d2433"/>
+    </symbol>
+  </svg>
+
   <header class="header">
-    <h1>Hatoclip</h1>
-    <p id="status" class="status" role="status">接続を確認しています…</p>
+    <div class="brand">
+      <svg class="mark" aria-hidden="true" focusable="false"><use href="#pigeon"/></svg>
+      <h1>Hatoclip</h1>
+    </div>
+    <div class="status-row">
+      <p id="status" class="status" role="status" aria-live="polite">接続を確認しています…</p>
+      <button id="reconnect-btn" type="button" class="link-btn">再接続</button>
+    </div>
   </header>
 
   <main>
-    <p id="no-key" class="notice" hidden>PCのQRコードを読み取ってください</p>
+    <section id="setup" class="card card-alert" hidden>
+      <h2 id="setup-title">PCのQRコードを読み取ってください</h2>
+      <p class="note">PCのタスクトレイにある鳩のアイコンから「接続用QRコードを表示」を開き、iPhoneのカメラで読み取ってください。</p>
+      <p class="note">ホーム画面に追加したアプリはSafariとデータが別なので、Safariで接続済みでも接続キーは引き継がれません。その場合は、SafariでQRから開いたページの「ショートカットでもっと便利に」で接続キーをコピーし、下の欄に貼り付けてください。</p>
+      <form id="key-form" class="key-form" autocomplete="off">
+        <label for="key-input" class="label">接続キー</label>
+        <div class="row">
+          <input id="key-input" class="field" type="text" inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="ここに貼り付け">
+          <button id="key-save-btn" type="submit" class="btn btn-secondary btn-inline">接続</button>
+        </div>
+        <p id="key-msg" class="msg" role="status" aria-live="polite"></p>
+      </form>
+    </section>
 
-    <section class="card">
-      <h2>PC → スマホ</h2>
+    <section class="card" aria-labelledby="pc-to-phone">
+      <h2 id="pc-to-phone">PC → スマホ</h2>
       <button id="fetch-btn" type="button" class="btn">PCのクリップボードを取得</button>
-      <textarea id="fetched" class="text" rows="5" readonly placeholder="ここにPCのクリップボードが表示されます"></textarea>
-      <button id="copy-btn" type="button" class="btn btn-secondary" disabled>コピー</button>
-      <p id="fetch-msg" class="msg" role="status"></p>
+      <div id="fetch-result" class="result" hidden>
+        <textarea id="fetched" class="text text-fetched" rows="3" readonly aria-label="PCのクリップボードの内容"></textarea>
+        <button id="copy-btn" type="button" class="btn btn-secondary">コピー</button>
+      </div>
+      <p id="fetch-msg" class="msg" role="status" aria-live="polite"></p>
     </section>
 
-    <section class="card">
-      <h2>スマホ → PC</h2>
-      <textarea id="send-text" class="text text-large" rows="8" placeholder="ここに貼り付けて「PCに送信」"></textarea>
+    <section class="card" aria-labelledby="phone-to-pc">
+      <h2 id="phone-to-pc">スマホ → PC</h2>
+      <textarea id="send-text" class="text text-large" rows="9" placeholder="ここに貼り付け" aria-label="PCに送るテキスト"></textarea>
       <button id="send-btn" type="button" class="btn">PCに送信</button>
-      <p id="send-msg" class="msg" role="status"></p>
+      <button id="paste-send-btn" type="button" class="btn btn-secondary" hidden>ペーストして送信</button>
+      <p id="send-msg" class="msg" role="status" aria-live="polite"></p>
     </section>
+
+    <details class="card details">
+      <summary>ショートカットでもっと便利に（任意）</summary>
+      <div class="details-body">
+        <p class="note">iPhoneの「ショートカット」アプリを使うと、ページを開かずにワンアクションで送信・受信できます。背面タップ（iPhoneの背面を2回たたく）に割り当てることもできます。</p>
+
+        <div class="link-list">
+          <a id="shortcut-send-link" class="btn btn-secondary" href="#" target="_blank" rel="noopener">送信用ショートカットを追加</a>
+          <a id="shortcut-receive-link" class="btn btn-secondary" href="#" target="_blank" rel="noopener">受信用ショートカットを追加</a>
+        </div>
+
+        <p class="note">ショートカットを追加するときに、次の2つを聞かれます。「コピー」して貼り付けてください。</p>
+
+        <label for="conn-url" class="label">接続先URL</label>
+        <div class="row">
+          <input id="conn-url" class="field" type="text" readonly>
+          <button id="conn-url-copy" type="button" class="btn btn-secondary btn-inline">コピー</button>
+        </div>
+
+        <label for="conn-key" class="label">接続キー</label>
+        <div class="row">
+          <input id="conn-key" class="field mono" type="text" readonly>
+          <button id="conn-key-toggle" type="button" class="btn btn-secondary btn-inline" aria-pressed="false">表示</button>
+          <button id="conn-key-copy" type="button" class="btn btn-secondary btn-inline">コピー</button>
+        </div>
+        <p id="details-msg" class="msg" role="status" aria-live="polite"></p>
+
+        <h3>背面タップに割り当てる</h3>
+        <ol class="steps">
+          <li>「設定」アプリを開く</li>
+          <li>アクセシビリティ → タッチ → 背面タップ</li>
+          <li>「ダブルタップ」（または「トリプルタップ」）を選ぶ</li>
+          <li>一覧の下の方にある、追加したショートカットを選ぶ</li>
+        </ol>
+      </div>
+    </details>
   </main>
+
+  <footer class="footer">
+    <p>このページはPCと同じWi-Fi内でのみ動作します。外部には何も送信しません。</p>
+  </footer>
 
   <script src="/app.js"></script>
 </body>

@@ -29,12 +29,25 @@ public sealed class HatoclipServer : IAsyncDisposable
         TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
     };
 
-    private static readonly Dictionary<string, (string File, string ContentType)> StaticFiles = new(StringComparer.OrdinalIgnoreCase)
+    private const string Html = "text/html; charset=utf-8";
+    private const string Png = "image/png";
+
+    /// <summary>
+    /// Public (no key) static files: request path → (embedded resource logical name, content type).
+    /// Web/** is embedded as "Hatoclip.Web.&lt;file&gt;", assets/*.ico as "Hatoclip.assets.&lt;file&gt;".
+    /// </summary>
+    private static readonly Dictionary<string, (string Resource, string ContentType)> StaticFiles = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["/"] = ("index.html", "text/html; charset=utf-8"),
-        ["/index.html"] = ("index.html", "text/html; charset=utf-8"),
-        ["/app.js"] = ("app.js", "text/javascript; charset=utf-8"),
-        ["/style.css"] = ("style.css", "text/css; charset=utf-8"),
+        ["/"] = ("Hatoclip.Web.index.html", Html),
+        ["/index.html"] = ("Hatoclip.Web.index.html", Html),
+        ["/app.js"] = ("Hatoclip.Web.app.js", "text/javascript; charset=utf-8"),
+        ["/style.css"] = ("Hatoclip.Web.style.css", "text/css; charset=utf-8"),
+        ["/manifest.webmanifest"] = ("Hatoclip.Web.manifest.webmanifest", "application/manifest+json; charset=utf-8"),
+        ["/icon.png"] = ("Hatoclip.Web.icon.png", Png),
+        ["/icon-192.png"] = ("Hatoclip.Web.icon-192.png", Png),
+        ["/apple-touch-icon.png"] = ("Hatoclip.Web.apple-touch-icon.png", Png),
+        // Same pigeon as the tray icon.
+        ["/favicon.ico"] = ("Hatoclip.assets.hatoclip.ico", "image/x-icon"),
     };
 
     private readonly ConfigStore _config;
@@ -276,7 +289,7 @@ public sealed class HatoclipServer : IAsyncDisposable
             return Results.NotFound();
         }
 
-        var bytes = EmbeddedAssets.GetWebFile(entry.File);
+        var bytes = EmbeddedAssets.Get(entry.Resource);
         if (bytes is null)
         {
             return Results.NotFound();

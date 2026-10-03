@@ -1,8 +1,3 @@
-// iOS Shortcut iCloud links (see docs/shortcut.md). While a URL still contains "REPLACE_ME",
-// the link is shown as「（準備中）」and cannot be tapped.
-var SHORTCUT_SEND_URL = 'https://www.icloud.com/shortcuts/REPLACE_ME';
-var SHORTCUT_RECEIVE_URL = 'https://www.icloud.com/shortcuts/REPLACE_ME';
-
 (function () {
   'use strict';
 
@@ -225,6 +220,8 @@ var SHORTCUT_RECEIVE_URL = 'https://www.icloud.com/shortcuts/REPLACE_ME';
       if (isOk(r)) {
         setStatus((r.body.pcName || 'PC') + MSG.statusConnected, 'ok');
         $('setup').hidden = true;
+        setShortcutLink('shortcut-send-link', r.body.shortcutSendUrl);
+        setShortcutLink('shortcut-receive-link', r.body.shortcutReceiveUrl);
       } else if (r.status === 401) {
         setStatus(MSG.statusBadKey, 'error');
         showSetup(MSG.setupBadKey);
@@ -332,16 +329,25 @@ var SHORTCUT_RECEIVE_URL = 'https://www.icloud.com/shortcuts/REPLACE_ME';
 
   // ---- shortcut section -------------------------------------------------------------------
 
-  function setupShortcutLink(id, url) {
+  // iOS Shortcut iCloud links come from the PC's config.json via /api/ping (see docs/shortcut.md)
+  // and are re-evaluated on every successful ping. An empty URL is shown as「（準備中）」and
+  // cannot be tapped.
+  function setShortcutLink(id, url) {
     var a = $(id);
-    if (!url || url.indexOf('REPLACE_ME') >= 0) {
+    var label = a.getAttribute('data-label');
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.removeAttribute('aria-disabled');
+      a.classList.remove('is-disabled');
+      a.textContent = label;
+    } else {
       a.removeAttribute('href');
       a.removeAttribute('target');
       a.setAttribute('aria-disabled', 'true');
       a.classList.add('is-disabled');
-      a.appendChild(document.createTextNode(MSG.comingSoon));
-    } else {
-      a.href = url;
+      a.textContent = label + MSG.comingSoon;
     }
   }
 
@@ -380,8 +386,6 @@ var SHORTCUT_RECEIVE_URL = 'https://www.icloud.com/shortcuts/REPLACE_ME';
       $('paste-send-btn').addEventListener('click', pasteAndSend);
     }
 
-    setupShortcutLink('shortcut-send-link', SHORTCUT_SEND_URL);
-    setupShortcutLink('shortcut-receive-link', SHORTCUT_RECEIVE_URL);
     $('conn-url').value = location.origin;
     $('conn-url-copy').addEventListener('click', function () { copyDetail(location.origin); });
     $('conn-key-toggle').addEventListener('click', toggleKeyVisibility);

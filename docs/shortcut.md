@@ -1,7 +1,7 @@
 # iOS ショートカットの作り方（作者用）
 
 送受信ページの「ショートカットでもっと便利に（任意）」から配布する、送信用・受信用の 2 つのショートカットの作り方です。
-作ったショートカットは iCloud リンクで共有し、`src/Hatoclip/Web/app.js` 先頭の定数に貼り付けます。
+作ったショートカットは iCloud リンクで共有し、PC ごとの設定ファイル `%LOCALAPPDATA%\Hatoclip\config.json` に書き込みます（ビルドし直す必要はありません）。
 
 ## API の仕様（ショートカットが使うもの）
 
@@ -67,17 +67,23 @@
 ## iCloud リンクで共有してページに載せる
 
 1. ショートカットアプリの一覧でショートカットを長押し →「共有」→「iCloudリンクをコピー」
-2. `src/Hatoclip/Web/app.js` の先頭の定数を書き換える
+2. **タスクトレイのメニューから「終了」で Hatoclip を終了する**（Hatoclip は設定が変わるたびにこのファイルを書き直すので、起動中に手で編集すると上書きされて消えることがあります）
+3. `%LOCALAPPDATA%\Hatoclip\config.json` をメモ帳などで開き、`shortcutSendUrl`（送信用）と `shortcutReceiveUrl`（受信用）に貼り付けて保存する（他の項目はそのまま）
 
-   ```js
-   var SHORTCUT_SEND_URL = 'https://www.icloud.com/shortcuts/xxxxxxxx';    // 送信用
-   var SHORTCUT_RECEIVE_URL = 'https://www.icloud.com/shortcuts/yyyyyyyy'; // 受信用
+   ```json
+   {
+     ...
+     "shortcutSendUrl": "https://www.icloud.com/shortcuts/xxxxxxxx",
+     "shortcutReceiveUrl": "https://www.icloud.com/shortcuts/yyyyyyyy"
+   }
    ```
 
-   `REPLACE_ME` が残っている間は、ページ上のリンクは「（準備中）」と表示されて押せません
-3. ビルドし直して exe を配布する（ページは exe に埋め込まれています）
+4. 編集後に Hatoclip を起動し直してください（config.json は起動時に読み込まれます）
 
-iCloud リンクは共有した時点の内容のコピーです。ショートカットを修正したら、もう一度リンクを作り直して定数を更新してください。
+空のまま（`""`）や `http://` / `https://` で始まる正しい URL でない間は、ページ上のリンクは「（準備中）」と表示されて押せません。
+2 つのキーは初回起動時に空の値で config.json に書き込まれます。ページは接続確認のたびに PC からリンクを受け取るので、Hatoclip を起動し直したあとページの「再接続」を押すか開き直せば反映されます。
+
+iCloud リンクは共有した時点の内容のコピーです。ショートカットを修正したら、もう一度リンクを作り直して config.json を更新してください。
 
 ## 背面タップに割り当てる
 

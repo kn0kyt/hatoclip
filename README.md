@@ -98,6 +98,7 @@ Safari の共有ボタン →「ホーム画面に追加」で、アプリのよ
 よく使う人は、iPhone の「ショートカット」アプリを使うと、ページを開かずにワンアクションで送受信できます。
 iPhone の背面を 2 回たたく「背面タップ」に割り当てることもできます。
 手順はページ下部の「ショートカットでもっと便利に（任意）」にあります。ショートカットの作り方は [docs/shortcut.md](docs/shortcut.md) を見てください。
+ページのショートカット追加リンクは、iCloud リンクを `%LOCALAPPDATA%\Hatoclip\config.json` の `shortcutSendUrl` / `shortcutReceiveUrl` に設定すると押せるようになります（設定方法は [docs/shortcut.md](docs/shortcut.md)）。設定するまでは「（準備中）」と表示されます。
 
 ## トラブルシューティング
 

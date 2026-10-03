@@ -170,11 +170,40 @@ public sealed class HatoclipServer : IAsyncDisposable
         app.Use(AuthenticateAsync);
 
         app.MapMethods("/{**path}", ["GET", "HEAD"], (Delegate)ServeStatic);
-        app.MapGet("/api/ping", () => Json(200, new { ok = true, pcName = Environment.MachineName }));
+        app.MapGet("/api/ping", Ping);
         app.MapPost("/api/clipboard", (Delegate)PostClipboardAsync);
         app.MapGet("/api/clipboard", GetClipboardAsync);
 
         return app;
+    }
+
+    /// <summary>
+    /// Connection check. Also hands the page the iOS Shortcut links from config.json (read from the
+    /// live config on every request); anything that is not an absolute http/https URL is sent as "".
+    /// </summary>
+    private IResult Ping()
+    {
+        var config = _config.Current;
+        return Json(200, new
+        {
+            ok = true,
+            pcName = Environment.MachineName,
+            shortcutSendUrl = SanitizeLinkUrl(config.ShortcutSendUrl),
+            shortcutReceiveUrl = SanitizeLinkUrl(config.ShortcutReceiveUrl),
+        });
+    }
+
+    private static string SanitizeLinkUrl(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrEmpty(trimmed)
+            || !Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            return "";
+        }
+
+        return uri.AbsoluteUri;
     }
 
     private static Socket CreateExclusiveListenSocket(EndPoint endpoint)

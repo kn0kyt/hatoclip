@@ -33,9 +33,10 @@ public sealed class TrayApplicationContext : ApplicationContext
         _monitor = new ConnectionMonitor(config, () => server.Port, ui);
         _keyRegenerator = new KeyRegenerator(config, rateLimiter, _monitor);
 
+        Theme.Initialize(); // follow Windows light/dark app theme changes while running
+
         var menu = new ContextMenuStrip();
-        _boldMenuFont = new Font(menu.Font, FontStyle.Bold);
-        var showQrItem = new ToolStripMenuItem("接続用QRコードを表示", null, (_, _) => ShowQrWindow()) { Font = _boldMenuFont };
+        var showQrItem = new ToolStripMenuItem("接続用QRコードを表示", null, (_, _) => ShowQrWindow());
         _autoStartItem = new ToolStripMenuItem("Windows起動時に自動起動", null, (_, _) => ToggleAutoStart());
         _allowGetItem = new ToolStripMenuItem("スマホからの取得を許可")
         {
@@ -67,6 +68,9 @@ public sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("終了", null, (_, _) => ExitThread());
         menu.Opening += (_, _) => _autoStartItem.Checked = SafeIsAutoStartEnabled();
+        TrayMenuRenderer.Apply(menu); // look only: font, colours, padding
+        _boldMenuFont = new Font(menu.Font, FontStyle.Bold);
+        showQrItem.Font = _boldMenuFont; // the default item is bold
 
         _idleIcon = TrayIcons.LoadIdle();
         _receivedIcon = TrayIcons.LoadReceived();

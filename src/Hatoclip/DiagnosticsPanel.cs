@@ -1,28 +1,66 @@
 namespace Hatoclip;
 
-/// <summary>Network diagnostics messages (Japanese) shown in the QR window (see docs/design.md).</summary>
-public sealed class DiagnosticsPanel : FlowLayoutPanel
+/// <summary>
+/// Network diagnostics messages (Japanese) shown in the QR window (see docs/design.md): a stack of
+/// <see cref="DiagnosticRow"/>s. The owner sets fonts, palette and scale and calls
+/// <see cref="LayoutRows"/> to place the rows for a width.
+/// </summary>
+public sealed class DiagnosticsPanel : ThemedControl
 {
-    private static readonly Color OkColor = Color.FromArgb(0, 120, 60);
-    private static readonly Color WarnColor = Color.FromArgb(180, 60, 0);
+    private const int RowGap = 10;
 
-    private readonly int _logicalTextWidth;
-    private Font? _boldFont;
-    private Font? _smallFont;
+    private Font? _regular;
+    private Font? _bold;
+    private Font? _small;
+    private List<(DiagnosticKind Kind, string Title, string? Body)> _shown = [];
 
-    /// <param name="logicalTextWidth">Wrap width at 96 DPI; scaled to the current DPI when displayed.</param>
-    public DiagnosticsPanel(int logicalTextWidth)
+    public DiagnosticsPanel()
     {
-        _logicalTextWidth = logicalTextWidth;
-        FlowDirection = FlowDirection.TopDown;
-        WrapContents = false;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        Margin = new Padding(0, 8, 0, 0);
+        BackColor = Palette.Card;
     }
 
     public void Display(ConnectionSnapshot s)
     {
+        var rows = new List<(DiagnosticKind Kind, string Title, string? Body)>();
+        if (!s.HasLanIp)
+        {
+            rows.Add((DiagnosticKind.Warning, "⚠ LAN の IP アドレスが見つかりません。Wi-Fi または有線 LAN に接続してください。", null));
+        }
+        else
+        {
+            switch (s.Category)
+            {
+                case NetworkCategory.Private:
+                    rows.Add((DiagnosticKind.Ok, "ネットワーク: プライベート ✓", null));
+                    break;
+                case NetworkCategory.Domain:
+                    rows.Add((DiagnosticKind.Ok, "ネットワーク: ドメイン ✓", null));
+                    break;
+                case NetworkCategory.Public:
+                    rows.Add((DiagnosticKind.Warning, "⚠ このネットワークは「パブリック」になっています。スマホから接続できない可能性があります。",
+                        "プライベートに変更する手順：設定 → ネットワークとインターネット → Wi-Fi（またはイーサネット）→ 接続中のネットワーク → 「プライベート ネットワーク」を選択"));
+                    break;
+                default:
+                    rows.Add((DiagnosticKind.Info, "ネットワーク: 種類を確認できませんでした", null));
+                    break;
+            }
+
+            if (s.Firewall is FirewallStatus.NotAllowed or FirewallStatus.Blocked)
+            {
+                rows.Add((DiagnosticKind.Warning, "⚠ ファイアウォールでこのアプリが許可されていない可能性があります。", null));
+            }
+        }
+
+        rows.Add((DiagnosticKind.Hint,
+            "スマホから接続できない場合は、初回起動時に表示された Windows ファイアウォールの確認で「許可」を選んだか確認してください。ゲスト用 Wi-Fi では接続できません。",
+            null));
+
+        if (rows.SequenceEqual(_shown))
+        {
+            return; // nothing changed: keep the controls (no flicker)
+        }
+
+        _shown = rows;
         SuspendLayout();
         foreach (var c in Controls.Cast<Control>().ToList())
         {
@@ -30,72 +68,68 @@ public sealed class DiagnosticsPanel : FlowLayoutPanel
         }
 
         Controls.Clear();
-
-        if (!s.HasLanIp)
+        foreach (var (kind, title, body) in rows)
         {
-            AddLine("⚠ LAN の IP アドレスが見つかりません。Wi-Fi または有線 LAN に接続してください。", WarnColor, BoldFont);
-        }
-        else
-        {
-            switch (s.Category)
+            var row = new DiagnosticRow(kind, title, body) { Palette = Palette, UiScale = UiScale };
+            if (_regular is not null)
             {
-                case NetworkCategory.Private:
-                    AddLine("ネットワーク: プライベート ✓", OkColor);
-                    break;
-                case NetworkCategory.Domain:
-                    AddLine("ネットワーク: ドメイン ✓", OkColor);
-                    break;
-                case NetworkCategory.Public:
-                    AddLine("⚠ このネットワークは「パブリック」になっています。スマホから接続できない可能性があります。", WarnColor, BoldFont);
-                    AddLine("プライベートに変更する手順：設定 → ネットワークとインターネット → Wi-Fi（またはイーサネット）→ 接続中のネットワーク → 「プライベート ネットワーク」を選択", WarnColor);
-                    break;
-                default:
-                    AddLine("ネットワーク: 種類を確認できませんでした", SystemColors.GrayText);
-                    break;
+                row.SetFonts(_regular, _bold!, _small!);
             }
 
-            if (s.Firewall is FirewallStatus.NotAllowed or FirewallStatus.Blocked)
+            Controls.Add(row);
+        }
+
+        ResumeLayout(false);
+    }
+
+    public void SetFonts(Font regular, Font bold, Font small)
+    {
+        _regular = regular;
+        _bold = bold;
+        _small = small;
+        foreach (var row in Controls.OfType<DiagnosticRow>())
+        {
+            row.SetFonts(regular, bold, small);
+        }
+    }
+
+    /// <summary>Places the rows top to bottom at <paramref name="width"/>; returns the total height (device pixels).</summary>
+    public int LayoutRows(int width)
+    {
+        var y = 0;
+        var first = true;
+        foreach (var row in Controls.OfType<DiagnosticRow>())
+        {
+            if (!first)
             {
-                AddLine("⚠ ファイアウォールでこのアプリが許可されていない可能性があります。", WarnColor, BoldFont);
+                y += S(RowGap);
             }
+
+            first = false;
+            var h = row.MeasureHeight(width);
+            row.SetBounds(0, y, width, h);
+            y += h;
         }
 
-        AddLine("スマホから接続できない場合は、初回起動時に表示された Windows ファイアウォールの確認で「許可」を選んだか確認してください。ゲスト用 Wi-Fi では接続できません。",
-            SystemColors.GrayText, SmallFont);
-
-        ResumeLayout(true);
+        return y;
     }
 
-    protected override void Dispose(bool disposing)
+    protected override void OnPaletteChanged()
     {
-        if (disposing)
+        BackColor = Palette.Card;
+        foreach (var row in Controls.OfType<DiagnosticRow>())
         {
-            _boldFont?.Dispose();
-            _smallFont?.Dispose();
+            row.Palette = Palette;
         }
-
-        base.Dispose(disposing);
     }
 
-    private Font BoldFont => _boldFont ??= new Font(Font, FontStyle.Bold);
-
-    private Font SmallFont => _smallFont ??= new Font(Font.FontFamily, Font.SizeInPoints - 0.5f, FontStyle.Regular);
-
-    private void AddLine(string text, Color color, Font? font = null)
+    protected override void OnUiScaleChanged()
     {
-        var label = new Label
+        foreach (var row in Controls.OfType<DiagnosticRow>())
         {
-            Text = text,
-            ForeColor = color,
-            AutoSize = true,
-            MaximumSize = new Size(LogicalToDeviceUnits(_logicalTextWidth), 0),
-            Margin = new Padding(0, 2, 0, 2),
-        };
-        if (font is not null)
-        {
-            label.Font = font;
+            row.UiScale = UiScale;
         }
-
-        Controls.Add(label);
     }
+
+    protected override void OnPaint(PaintEventArgs e) => e.Graphics.Clear(Palette.Card);
 }

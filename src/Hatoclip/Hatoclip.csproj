@@ -9,6 +9,8 @@
     <AssemblyName>Hatoclip</AssemblyName>
     <RootNamespace>Hatoclip</RootNamespace>
     <ApplicationIcon>assets\hatoclip.ico</ApplicationIcon>
+    <!-- Per-monitor DPI awareness (ApplicationConfiguration.Initialize); the QR window scales itself. -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
 
   <PropertyGroup Label="Version and metadata">

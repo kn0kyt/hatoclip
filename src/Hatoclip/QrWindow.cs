@@ -7,121 +7,110 @@ namespace Hatoclip;
 /// variants) with copy buttons, a "phone connected" line, network diagnostics, and key regeneration.
 /// Closing only hides it.
 /// </summary>
+/// <remarks>
+/// Look: the phone page's palette and shapes (<see cref="Theme"/>): a header with the pigeon mark on
+/// the window background, one rounded card (QR on the left, connection status and diagnostics on the
+/// right, the two URL rows below), and the buttons underneath. Layout is manual, in logical (96 DPI)
+/// pixels scaled by the window's DPI (per-monitor v2), recomputed on DPI and content changes.
+/// </remarks>
 public sealed class QrWindow : Form
 {
-    private const int ContentWidth = 540; // logical (96 DPI) pixels
-    private const int CopyButtonWidth = 96;
+    // Logical (96 DPI) pixels.
     private const int QrSize = 300;
+    private const int MinQrSize = 200;
+    private const int ColumnGap = 24;
+    private const int RightColumnWidth = 340;
+    private const int MarkSize = 40;
+    private const int FieldHeight = 34;
+    private const int ButtonHeight = 34;
+    private const int CopyButtonWidth = 88;
+    private const int MinButtonWidth = 96;
+
     private const string PhoneConnectedText = "✓ スマホが接続しました";
-    private static readonly Color PhoneConnectedColor = Color.FromArgb(0, 120, 60); // same green as DiagnosticsPanel
 
     private readonly ConnectionMonitor _monitor;
     private readonly Action<IWin32Window> _regenerateKey;
-    private readonly PictureBox _qrBox;
-    private readonly TextBox _ipUrlBox;
-    private readonly TextBox _localUrlBox;
-    private readonly Button _ipCopyButton;
-    private readonly Button _closeButton;
-    private readonly Label _phoneConnectedLabel;
+    private readonly PigeonMark _mark;
+    private readonly Label _title;
+    private readonly Label _subtitle;
+    private readonly CardPanel _card;
+    private readonly QrView _qr;
+    private readonly DiagnosticRow _phoneConnected;
     private readonly DiagnosticsPanel _diagnostics;
+    private readonly Label _ipCaption;
+    private readonly Label _localCaption;
+    private readonly UrlField _ipUrl;
+    private readonly UrlField _localUrl;
+    private readonly RoundedButton _ipCopyButton;
+    private readonly RoundedButton _localCopyButton;
+    private readonly RoundedButton _regenerateButton;
+    private readonly RoundedButton _closeButton;
     private readonly Icon _icon;
-    private readonly Font _boldFont;
+    private ThemePalette _palette;
+    private UiFonts? _fonts;
+    private float _scale = 1f;
+    private int _qrLogicalSize = QrSize;
     private bool _allowClose;
+    private bool _centered;
+    private bool _fitting;
     private string? _displayedKey;
+    private ConnectionSnapshot? _snapshot;
+    private string? _renderedQrUrl;
+    private int _renderedQrArea;
 
     public QrWindow(ConnectionMonitor monitor, Action<IWin32Window> regenerateKey)
     {
         _monitor = monitor;
         _regenerateKey = regenerateKey;
         _icon = TrayIcons.LoadWindowIcon();
+        _palette = Theme.Current;
 
         SuspendLayout();
-        AutoScaleDimensions = new SizeF(96F, 96F);
-        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleMode = AutoScaleMode.None; // DPI scaling is done by ApplyScale
         Text = "Hatoclip – 接続用QRコード";
         Icon = _icon;
-        Font = SystemFonts.MessageBoxFont ?? Font;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = true;
         ShowInTaskbar = true;
         StartPosition = FormStartPosition.CenterScreen;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        BackColor = SystemColors.Window;
+        DoubleBuffered = true;
 
-        var root = new TableLayoutPanel
-        {
-            ColumnCount = 1,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(16),
-            Dock = DockStyle.Fill,
-        };
+        _mark = new PigeonMark();
+        _title = new Label { Text = "Hatoclip", AutoSize = true, UseMnemonic = false };
+        _subtitle = new Label { Text = "iPhone のカメラで読み取り、表示されたリンクを開いてください", AutoSize = true, UseMnemonic = false };
 
-        root.Controls.Add(new Label
-        {
-            Text = "iPhone のカメラで読み取り、表示されたリンクを開いてください",
-            AutoSize = true,
-            MaximumSize = new Size(ContentWidth, 0),
-            Margin = new Padding(0, 0, 0, 8),
-            Anchor = AnchorStyles.None,
-        });
+        _card = new CardPanel { TabIndex = 0 };
+        _qr = new QrView { AccessibleName = "接続用QRコード" };
 
-        _qrBox = new PictureBox
-        {
-            Size = new Size(QrSize, QrSize),
-            SizeMode = PictureBoxSizeMode.CenterImage,
-            BackColor = Color.White,
-            Anchor = AnchorStyles.None,
-            Margin = new Padding(0, 0, 0, 4),
-            AccessibleName = "接続用QRコード",
-        };
-        root.Controls.Add(_qrBox);
+        // Empty until a phone connects. Its height is always reserved, so filling it in or clearing it
+        // does not move the rest of the window.
+        _phoneConnected = new DiagnosticRow(DiagnosticKind.Connected, "");
+        _diagnostics = new DiagnosticsPanel();
 
-        // Empty until a phone connects. Its line height is reserved in OnLoad, so filling it in or
-        // clearing it does not move the rest of the window.
-        _boldFont = new Font(Font, FontStyle.Bold);
-        _phoneConnectedLabel = new Label
-        {
-            AutoSize = true,
-            Font = _boldFont,
-            ForeColor = PhoneConnectedColor,
-            Anchor = AnchorStyles.None,
-            Margin = new Padding(0, 0, 0, 4),
-        };
-        root.Controls.Add(_phoneConnectedLabel);
+        _ipCaption = new Label { Text = "URL（IP アドレス）", AutoSize = true, UseMnemonic = false };
+        _ipUrl = new UrlField { FieldAccessibleName = "URL（IP アドレス）", TabIndex = 0 };
+        _ipCopyButton = CreateCopyButton(_ipUrl, tabIndex: 1);
+        _localCaption = new Label { Text = "URL（PC 名 .local 版）", AutoSize = true, UseMnemonic = false };
+        _localUrl = new UrlField { FieldAccessibleName = "URL（PC 名 .local 版）", TabIndex = 2 };
+        _localCopyButton = CreateCopyButton(_localUrl, tabIndex: 3);
 
-        (_ipUrlBox, _ipCopyButton) = AddUrlRow(root, "URL（IP アドレス）");
-        (_localUrlBox, _) = AddUrlRow(root, "URL（PC 名 .local 版）");
+        _card.Controls.AddRange([_qr, _phoneConnected, _diagnostics, _ipCaption, _ipUrl, _ipCopyButton, _localCaption, _localUrl, _localCopyButton]);
 
-        _diagnostics = new DiagnosticsPanel(ContentWidth);
-        root.Controls.Add(_diagnostics);
+        _regenerateButton = new RoundedButton { Text = "キーを再生成", Kind = RoundedButtonKind.Quiet, TabIndex = 1 };
+        _regenerateButton.Click += (_, _) => _regenerateKey(this);
+        _closeButton = new RoundedButton { Text = "閉じる", Kind = RoundedButtonKind.Primary, TabIndex = 2 };
+        _closeButton.Click += (_, _) => Hide();
 
-        var buttons = new FlowLayoutPanel
-        {
-            FlowDirection = FlowDirection.RightToLeft,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Width = ContentWidth,
-            Anchor = AnchorStyles.Left | AnchorStyles.Right,
-            Margin = new Padding(0, 12, 0, 0),
-            WrapContents = false,
-        };
-        var closeButton = new Button { Text = "閉じる", AutoSize = true, MinimumSize = new Size(88, 0) };
-        _closeButton = closeButton;
-        closeButton.Click += (_, _) => Hide();
-        var regenerateButton = new Button { Text = "キーを再生成", AutoSize = true, MinimumSize = new Size(88, 0) };
-        regenerateButton.Click += (_, _) => _regenerateKey(this);
-        buttons.Controls.Add(closeButton);
-        buttons.Controls.Add(regenerateButton);
-        root.Controls.Add(buttons);
+        Controls.AddRange([_mark, _title, _subtitle, _card, _regenerateButton, _closeButton]);
+        CancelButton = _closeButton;
 
-        CancelButton = closeButton;
-        Controls.Add(root);
-        ResumeLayout(true);
+        ApplyPalette();
+        ApplyScale(DeviceDpi);
+        ResumeLayout(false);
 
         _monitor.Changed += OnSnapshotChanged;
+        Theme.Changed += OnThemeChanged;
     }
 
     /// <summary>Shows the window (or restores it) and brings it to the front.</summary>
@@ -148,7 +137,7 @@ public sealed class QrWindow : Form
     /// Shows "✓ スマホが接続しました" (a phone with the current key opened the page). It stays until
     /// the window is shown again or the key changes. UI thread only.
     /// </summary>
-    public void ShowPhoneConnected() => _phoneConnectedLabel.Text = PhoneConnectedText;
+    public void ShowPhoneConnected() => _phoneConnected.SetText(PhoneConnectedText);
 
     /// <summary>Allows the window to really close (application exit).</summary>
     public void CloseForExit()
@@ -157,18 +146,37 @@ public sealed class QrWindow : Form
         Close();
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        NativeTheme.SetDarkTitleBar(Handle, _palette.IsDark);
+        NativeTheme.SetCornerPreference(Handle, NativeTheme.CornerPreference.Round);
+    }
+
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-
-        // Reserve the height of the "phone connected" line (measured with the final font after DPI
-        // scaling) so that showing or clearing it never makes the window jump. WinForms rescales
-        // MinimumSize when the window moves to a monitor with another DPI.
-        _phoneConnectedLabel.Text = PhoneConnectedText;
-        _phoneConnectedLabel.MinimumSize = new Size(0, _phoneConnectedLabel.PreferredHeight);
-        _phoneConnectedLabel.Text = "";
-
+        ApplyScale(DeviceDpi); // the handle exists now: DeviceDpi is the DPI of the monitor the window is on
         Display(_monitor.Current);
+        if (!_centered)
+        {
+            _centered = true;
+            CenterToScreen(); // the size is final only now
+        }
+    }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        ApplyScale(e.DeviceDpiNew);
+        // Child controls receive their own DPI messages around this one; lay out again once they are done.
+        BeginInvoke(() =>
+        {
+            if (!IsDisposed)
+            {
+                ApplyScale(DeviceDpi);
+            }
+        });
     }
 
     protected override void OnShown(EventArgs e)
@@ -182,7 +190,7 @@ public sealed class QrWindow : Form
         base.OnVisibleChanged(e);
         if (Visible)
         {
-            _phoneConnectedLabel.Text = ""; // only report phones that connect while the window is showing
+            _phoneConnected.SetText(""); // only report phones that connect while the window is showing
             _monitor.RequestRefresh(); // pick up changes that happened while hidden
         }
     }
@@ -204,12 +212,15 @@ public sealed class QrWindow : Form
         if (disposing)
         {
             _monitor.Changed -= OnSnapshotChanged;
-            _qrBox.Image?.Dispose();
+            Theme.Changed -= OnThemeChanged;
             _icon.Dispose();
-            _boldFont.Dispose();
         }
 
         base.Dispose(disposing);
+        if (disposing)
+        {
+            _fonts?.Dispose(); // after the controls that use them
+        }
     }
 
     private void OnSnapshotChanged(object? sender, ConnectionSnapshot snapshot)
@@ -220,81 +231,275 @@ public sealed class QrWindow : Form
         }
     }
 
+    private void OnThemeChanged(object? sender, EventArgs e)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        _palette = Theme.Current;
+        ApplyPalette();
+        if (IsHandleCreated)
+        {
+            NativeTheme.SetDarkTitleBar(Handle, _palette.IsDark);
+        }
+
+        Invalidate(true);
+    }
+
     private void Display(ConnectionSnapshot s)
     {
-        SuspendLayout();
         if (_displayedKey is not null && _displayedKey != s.Key)
         {
-            _phoneConnectedLabel.Text = ""; // that phone used the old key; the new QR has not been used yet
+            _phoneConnected.SetText(""); // that phone used the old key; the new QR has not been used yet
         }
 
         _displayedKey = s.Key;
-        var old = _qrBox.Image;
+        _snapshot = s; // the QR image is re-rendered by LayoutContent when the URL or the size changed
+
+        _ipUrl.Value = s.IpUrl ?? "（LAN の IP アドレスが見つかりません）";
+        _ipUrl.Enabled = s.HasLanIp;
+        _ipCopyButton.Enabled = s.HasLanIp;
+        _localUrl.Value = s.LocalUrl;
+        _diagnostics.Display(s);
+        _diagnostics.SetFonts(_fonts!.Regular, _fonts.Bold, _fonts.Small);
+        _diagnostics.Palette = _palette;
+        _diagnostics.UiScale = _scale;
+        LayoutContent();
+    }
+
+    private void RenderQr()
+    {
+        if (_snapshot is null)
+        {
+            return;
+        }
+
+        _renderedQrUrl = _snapshot.QrUrl;
+        _renderedQrArea = _qr.ImageArea;
         try
         {
-            _qrBox.Image = QrCodeRenderer.Render(s.QrUrl, Math.Min(_qrBox.ClientSize.Width, _qrBox.ClientSize.Height));
+            _qr.Image = QrCodeRenderer.Render(_snapshot.QrUrl, _qr.ImageArea);
         }
         catch (Exception ex)
         {
             Log.Error("QR code rendering failed.", ex);
-            _qrBox.Image = null;
+            _qr.Image = null;
         }
-
-        old?.Dispose();
-
-        _ipUrlBox.Text = s.IpUrl ?? "（LAN の IP アドレスが見つかりません）";
-        _ipUrlBox.Enabled = s.HasLanIp;
-        _ipCopyButton.Enabled = s.HasLanIp;
-        _localUrlBox.Text = s.LocalUrl;
-        _diagnostics.Display(s);
-        ResumeLayout(true);
     }
 
-    private (TextBox Box, Button Copy) AddUrlRow(TableLayoutPanel root, string caption)
+    private RoundedButton CreateCopyButton(UrlField field, int tabIndex)
     {
-        root.Controls.Add(new Label
-        {
-            Text = caption,
-            AutoSize = true,
-            MaximumSize = new Size(ContentWidth, 0),
-            ForeColor = SystemColors.GrayText,
-            Margin = new Padding(0, 6, 0, 2),
-        });
+        var copy = new RoundedButton { Text = "コピー", Kind = RoundedButtonKind.Secondary, TabIndex = tabIndex };
+        copy.Click += (_, _) => CopyToClipboard(field.Value, copy);
+        return copy;
+    }
 
-        var row = new TableLayoutPanel
-        {
-            ColumnCount = 2,
-            RowCount = 1,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0),
-        };
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ContentWidth - CopyButtonWidth));
-        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, CopyButtonWidth));
-        row.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+    private void ApplyPalette()
+    {
+        var p = _palette;
+        BackColor = p.Background;
+        _title.ForeColor = p.Text;
+        _title.BackColor = p.Background;
+        _subtitle.ForeColor = p.Muted;
+        _subtitle.BackColor = p.Background;
+        _ipCaption.ForeColor = p.Muted;
+        _localCaption.ForeColor = p.Muted;
+        _ipCaption.BackColor = _localCaption.BackColor = p.Card;
 
-        var box = new TextBox
+        foreach (var c in new ThemedControl[] { _mark, _card, _qr, _phoneConnected, _diagnostics, _ipUrl, _localUrl })
         {
-            ReadOnly = true,
-            BackColor = SystemColors.Window,
-            Anchor = AnchorStyles.Left | AnchorStyles.Right,
-            Margin = new Padding(0, 0, 6, 0),
-        };
-        box.GotFocus += (_, _) => box.BeginInvoke(box.SelectAll);
+            c.Palette = p;
+        }
 
-        var copy = new Button
+        foreach (var b in new[] { _ipCopyButton, _localCopyButton })
         {
-            Text = "コピー",
-            Anchor = AnchorStyles.Left | AnchorStyles.Right,
-            Height = box.PreferredHeight + 4,
-            Margin = new Padding(0),
-        };
-        copy.Click += (_, _) => CopyToClipboard(box.Text, copy);
+            b.Palette = p;
+            b.SurfaceColor = p.Card;
+        }
 
-        row.Controls.Add(box, 0, 0);
-        row.Controls.Add(copy, 1, 0);
-        root.Controls.Add(row);
-        return (box, copy);
+        foreach (var b in new[] { _regenerateButton, _closeButton })
+        {
+            b.Palette = p;
+            b.SurfaceColor = p.Background;
+        }
+    }
+
+    /// <summary>Recreates the fonts and re-lays out the window for <paramref name="dpi"/>.</summary>
+    internal void ApplyScale(int dpi)
+    {
+        _scale = dpi / 96f;
+        UiFonts? old = null;
+        if (_fonts is null || _fonts.Dpi != dpi)
+        {
+            // Only replace fonts for a new DPI: Control.Font ignores a value-equal font, so a fresh but
+            // equal set would leave the controls on the old (then disposed) instances.
+            old = _fonts;
+            _fonts = new UiFonts(dpi);
+        }
+
+        Font = _fonts.Regular;
+        _title.Font = _fonts.Title;
+        _subtitle.Font = _fonts.Regular;
+        _ipCaption.Font = _localCaption.Font = _fonts.SmallBold;
+        _ipUrl.TextFont = _localUrl.TextFont = _fonts.Regular;
+        foreach (var b in new[] { _ipCopyButton, _localCopyButton, _regenerateButton, _closeButton })
+        {
+            b.Font = _fonts.Button;
+            b.UiScale = _scale;
+        }
+
+        _phoneConnected.SetFonts(_fonts.Regular, _fonts.Bold, _fonts.Small);
+        _diagnostics.SetFonts(_fonts.Regular, _fonts.Bold, _fonts.Small);
+        foreach (var c in new ThemedControl[] { _mark, _card, _qr, _phoneConnected, _diagnostics, _ipUrl, _localUrl })
+        {
+            c.UiScale = _scale;
+        }
+
+        LayoutContent();
+        old?.Dispose();
+    }
+
+    private int S(int logical) => Theme.Scale(logical, _scale);
+
+    /// <summary>Places every control for the current scale and content, and sizes the window.</summary>
+    private void LayoutContent()
+    {
+        if (_fonts is null)
+        {
+            return;
+        }
+
+        if (!_fitting)
+        {
+            _qrLogicalSize = QrSize; // FitToScreen shrinks it again only if the full size does not fit
+        }
+
+        SuspendLayout();
+        _card.SuspendLayout();
+
+        var outer = S(Theme.OuterPadding);
+        var cardPad = S(Theme.CardPadding);
+        var qrSize = S(_qrLogicalSize);
+        var columnGap = S(ColumnGap);
+        var rightWidth = S(RightColumnWidth);
+        var innerWidth = qrSize + columnGap + rightWidth;
+        var cardWidth = innerWidth + 2 * cardPad;
+        var clientWidth = cardWidth + 2 * outer;
+
+        // Header: mark, then title over subtitle, vertically centred on the mark.
+        var y = outer;
+        var mark = S(MarkSize);
+        var textBlock = _title.PreferredHeight + _subtitle.PreferredHeight;
+        var headerHeight = Math.Max(mark, textBlock);
+        _mark.SetBounds(outer - S(2), y + (headerHeight - mark) / 2, mark, mark);
+        var textX = outer + mark + S(10);
+        var textY = y + (headerHeight - textBlock) / 2;
+        _title.Location = new Point(textX - S(1), textY);
+        _subtitle.Location = new Point(textX, textY + _title.PreferredHeight);
+        y += headerHeight + S(Theme.BlockGap);
+
+        // Card, top block: QR on the left; diagnostics (top) and "phone connected" (bottom) on the right.
+        var cy = cardPad;
+        _qr.SetBounds(cardPad, cy, qrSize, qrSize);
+        var rightX = cardPad + qrSize + columnGap;
+        var diagnosticsHeight = _diagnostics.LayoutRows(rightWidth);
+        _diagnostics.SetBounds(rightX, cy, rightWidth, diagnosticsHeight);
+        var connectedHeight = _phoneConnected.MeasureHeight(rightWidth);
+        var connectedY = Math.Max(cy + diagnosticsHeight + S(12), cy + qrSize - connectedHeight);
+        _phoneConnected.SetBounds(rightX, connectedY, rightWidth, connectedHeight);
+        cy = Math.Max(cy + qrSize, connectedY + connectedHeight) + S(Theme.BlockGap) + S(2);
+
+        // Card, URL rows (full width).
+        var copyBody = Math.Max(S(CopyButtonWidth), _ipCopyButton.MeasureBodyWidth("コピー済み"));
+        var fieldHeight = Math.Max(S(FieldHeight), _ipUrl.TextFont.Height + S(14));
+        cy = LayoutUrlRow(_ipCaption, _ipUrl, _ipCopyButton, cardPad, cy, innerWidth, copyBody, fieldHeight);
+        cy += S(10);
+        cy = LayoutUrlRow(_localCaption, _localUrl, _localCopyButton, cardPad, cy, innerWidth, copyBody, fieldHeight);
+        cy += cardPad;
+        _card.SetBounds(outer, y, cardWidth, cy);
+        y += cy + S(Theme.BlockGap);
+
+        // Buttons: キーを再生成 on the left (quiet), 閉じる on the right (primary).
+        var buttonHeight = Math.Max(S(ButtonHeight), _closeButton.Font.Height + S(14));
+        PlaceButton(_regenerateButton, outer, y, buttonHeight, alignRight: false);
+        PlaceButton(_closeButton, outer + cardWidth, y, buttonHeight, alignRight: true);
+        y += buttonHeight + outer;
+
+        _card.ResumeLayout(false);
+        ResumeLayout(false);
+
+        ClientSize = new Size(clientWidth, y);
+
+        if (FitToScreen())
+        {
+            return; // laid out again with a smaller QR code
+        }
+
+        if (_snapshot is not null && (_snapshot.QrUrl != _renderedQrUrl || _qr.ImageArea != _renderedQrArea))
+        {
+            RenderQr();
+        }
+    }
+
+    private int LayoutUrlRow(Label caption, UrlField field, RoundedButton copy, int x, int y, int width, int copyBody, int fieldHeight)
+    {
+        caption.Location = new Point(x + S(2), y);
+        y += caption.PreferredHeight + S(4);
+        var fieldWidth = width - copyBody - S(Theme.SmallGap);
+        field.SetBounds(x, y, fieldWidth, fieldHeight);
+        var inset = copy.BodyInset;
+        copy.SetBounds(x + width - copyBody - inset, y - inset, copyBody + 2 * inset, fieldHeight + 2 * inset);
+        return y + fieldHeight;
+    }
+
+    private void PlaceButton(RoundedButton button, int x, int y, int bodyHeight, bool alignRight)
+    {
+        var inset = button.BodyInset;
+        var bodyWidth = Math.Max(S(MinButtonWidth), button.MeasureBodyWidth(button.Text));
+        var left = alignRight ? x - bodyWidth : x;
+        button.SetBounds(left - inset, y - inset, bodyWidth + 2 * inset, bodyHeight + 2 * inset);
+    }
+
+    /// <summary>
+    /// When the window is taller than the screen's working area (small screen at a high scale), shrinks
+    /// the QR code (not below <see cref="MinQrSize"/>) and lays out again. Returns true if it did.
+    /// </summary>
+    private bool FitToScreen()
+    {
+        if (!IsHandleCreated)
+        {
+            return false;
+        }
+
+        var available = Screen.FromHandle(Handle).WorkingArea.Height;
+        var overflow = Height - available;
+        if (_fitting || overflow <= 0 || _qrLogicalSize <= MinQrSize)
+        {
+            return false;
+        }
+
+        _fitting = true;
+        try
+        {
+            var before = (Height, Qr: _qrLogicalSize);
+            var shrink = (int)Math.Ceiling(overflow / _scale);
+            _qrLogicalSize = Math.Max(MinQrSize, _qrLogicalSize - shrink);
+            LayoutContent();
+            if (Height >= before.Height)
+            {
+                // The diagnostics column, not the QR code, sets the height: a smaller QR does not help.
+                _qrLogicalSize = before.Qr;
+                LayoutContent();
+            }
+        }
+        finally
+        {
+            _fitting = false;
+        }
+
+        return true;
     }
 
     private static void CopyToClipboard(string text, Button button)
@@ -325,4 +530,43 @@ public sealed class QrWindow : Form
     [DllImport("user32.dll", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>The window's fonts for one DPI (device-pixel sizes, see <see cref="Theme.CreateFont"/>).</summary>
+    private sealed class UiFonts : IDisposable
+    {
+        public UiFonts(int dpi)
+        {
+            Dpi = dpi;
+            Regular = Theme.CreateFont(Theme.BaseFontSize, dpi);
+            Bold = Theme.CreateFont(Theme.BaseFontSize, dpi, semibold: true);
+            Small = Theme.CreateFont(Theme.SmallFontSize, dpi);
+            SmallBold = Theme.CreateFont(Theme.SmallFontSize, dpi, semibold: true);
+            Title = Theme.CreateFont(Theme.TitleFontSize, dpi, semibold: true);
+            Button = Theme.CreateFont(Theme.BaseFontSize, dpi, semibold: true);
+        }
+
+        public int Dpi { get; }
+
+        public Font Regular { get; }
+
+        public Font Bold { get; }
+
+        public Font Small { get; }
+
+        public Font SmallBold { get; }
+
+        public Font Title { get; }
+
+        public Font Button { get; }
+
+        public void Dispose()
+        {
+            Regular.Dispose();
+            Bold.Dispose();
+            Small.Dispose();
+            SmallBold.Dispose();
+            Title.Dispose();
+            Button.Dispose();
+        }
+    }
 }

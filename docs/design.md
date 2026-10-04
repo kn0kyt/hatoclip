@@ -59,7 +59,10 @@ iPhone（およびスマホ全般）と Windows PC の間で、クリップボ�
 | クリップボード | `IClipboardService` / `ClipboardService` | テキストの読み書き（UI スレッドで実行、リトライ） |
 | | `UiDispatcher` | 任意のスレッドから UI スレッドへの処理の受け渡し |
 | UI | `TrayApplicationContext` | トレイアイコン、メニュー、通知、アイコンの切り替え |
-| | `QrWindow` / `DiagnosticsPanel` / `QrCodeRenderer` | 接続用 QR ウィンドウと診断表示 |
+| | `QrWindow` / `DiagnosticsPanel` / `DiagnosticRow` / `QrCodeRenderer` | 接続用 QR ウィンドウと診断表示 |
+| | `Theme` / `ThemePalette` / `NativeTheme` | 配色（ライト／ダーク）・フォント・寸法の定義、Windows のアプリモードの読み取り、DWM のタイトルバー設定 |
+| | `ThemedControl` / `CardPanel` / `QrView` / `UrlField` / `RoundedButton` / `PigeonMark` / `Drawing` | QR ウィンドウの自前描画の部品（カード、QR の台紙、URL 欄、角丸ボタン、鳩のマーク、描画ヘルパー） |
+| | `TrayMenuRenderer` | トレイメニューの描画（配色・ハイライト・チェック・区切り線） |
 | | `KeyRegenerator` | キー再生成の確認と実行 |
 | | `TrayIcons` | アイコンの読み込み |
 | ネットワーク | `ConnectionMonitor` / `ConnectionSnapshot` | 接続 URL と診断結果の追跡 |
@@ -221,6 +224,19 @@ iPhone（およびスマホ全般）と Windows PC の間で、クリップボ�
 - 「✓ スマホが接続しました」は、ウィンドウが表示されている間に `/api/ping` が成功したときだけ出す（6.2）。ウィンドウを表示し直したときと、キーが変わったとき（再生成）に消す。接続してもウィンドウは自動では閉じない。表示・非表示でウィンドウの大きさが変わらないよう、1 行分の高さを最初から確保している
 - `.local` 名は DNS ホスト名（`Dns.GetHostName()`、小文字）を使う。`MachineName` は NetBIOS 名で 15 文字に切られるため
 - QR は 1 モジュールが整数ピクセルになるように縮尺を決める（カメラで読みやすいように）
+
+**見た目**：
+
+- 配色はスマホのページ（`Web/style.css` の CSS 変数）と同じ値を `Theme` にまとめている（背景・カード・入力欄・文字・薄い文字・枠線・アクセント・フォーカスなど）。警告の色（淡い琥珀色）と接続確認の淡い緑だけは PC 側で定義。フォントは Yu Gothic UI（無ければ Segoe UI）。寸法（余白・角丸・ボタンの高さ）も `Theme` と `QrWindow` の定数で、96 DPI の論理ピクセル
+- 構成：上に鳩のマーク（ページの SVG と同じ形を GDI+ で描画）と「Hatoclip」、案内文。その下に角丸のカード 1 枚で、左に QR（白い角丸の台紙。ダークでも白地に黒）、右にネットワーク診断と接続確認、下に URL の 2 行。カードの下に「キーを再生成」（枠線だけの控えめなボタン、左）と「閉じる」（アクセント色、右）
+- 部品は自前描画（`RoundedButton` は `Button` の派生なので Enter / Space、`CancelButton`、読み上げの役割はそのまま）。キーボード操作時はボタンにフォーカスの輪を描く
+- URL 欄は枠なしの読み取り専用 `TextBox` を角丸の欄に入れたもの。フォーカスが無いときに長い URL は末尾を「…」で省略し、フォーカスすると全文に戻して全選択する。コピーは常に全文
+- 診断の警告は淡い琥珀色の角丸の囲みに、先頭の「⚠」を三角のアイコンとして描く（文字列そのものは変えていない。読み上げは全文）。問題なしは緑の丸、種類不明は灰色の丸、末尾の注記は小さな薄い文字
+- ライト／ダークは Windows の「既定のアプリ モード」（`HKCU\…\Themes\Personalize` の `AppsUseLightTheme`）に従い、起動中の切り替えにも追従する（`SystemEvents.UserPreferenceChanged`）。タイトルバーは DWM の `DWMWA_USE_IMMERSIVE_DARK_MODE` で合わせる。開発用に環境変数 `HATOCLIP_THEME=light|dark` で固定できる。メッセージボックスは Windows 標準のまま
+- DPI：アプリは Per-Monitor V2（csproj の `ApplicationHighDpiMode`）。QR ウィンドウは自動スケーリングを使わず、ウィンドウの DPI から配置・フォント（ピクセル指定）・角丸・線の太さを計算し直す（DPI の違うモニターへ移したときも）。QR 画像もその大きさで描き直す。ウィンドウが作業領域より高くなる場合は QR を小さくする（最小 200 論理ピクセル）。100 %・125 %（実モニター）と 150 %・200 %（同じ計算を強制した描画）で確認
+- Windows 11 ではウィンドウの角を丸くし、トレイメニューも小さな角丸と DWM の枠線にする。Windows 10 では属性の設定が失敗するだけで、四角のまま（メニューは自前の枠線）
+
+**トレイメニューの見た目**：`TrayMenuRenderer` で、カード色の背景、選択中の項目は淡いアクセント色の角丸、チェックはアクセント色の線、区切り線は枠線の色、項目の上下に余白。項目と順序は 7.1 のとおり。
 
 **自動更新**：`ConnectionMonitor` が `NetworkChange.NetworkAddressChanged` / `NetworkAvailabilityChanged` のイベントと、10 秒ごとのポーリングで IP・ポート・キー・診断を計算し直す。前回と違うときだけ QR ウィンドウとツールチップを更新する。ウィンドウを表示したときも計算し直す。
 
@@ -404,6 +420,7 @@ iPhone（およびスマホ全般）と Windows PC の間で、クリップボ�
 | `ConfigStoreTests` | 初回生成（128 bit の 16 進キー、既定値）、往復、古い設定の書き戻し、壊れたファイルのバックアップ、不正なキー・ポートの置き換え、キー再生成 |
 | `FirewallRuleTests` | ファイアウォール規則文字列の判定（有効・方向・プロファイル・プロトコル・パス・ポート範囲・ブロック優先・不正な文字列） |
 | `PureHelperTests` | ショートカット URL の検査、仮想アダプターの除外と候補の順序、接続 URL のフラグメント、通知プレビュー、履歴除外のクリップボード形式、埋め込みアイコン |
+| `ThemeTests` ほか | テーマ指定の解釈、`AppsUseLightTheme` の判定、論理ピクセルの換算、配色がページと同じ値か、URL の「…」省略（サロゲートペアを切らない）、色の混合 |
 
 テストのための継ぎ目：
 

@@ -203,10 +203,11 @@ src/Hatoclip/Web/      スマホ用ページ（exe に埋め込み）
 src/Hatoclip/assets/   トレイ・exe のアイコン（tools/make-tray-icons.ps1 で生成）
 tests/Hatoclip.Tests/  単体テスト・HTTP API のテスト（xUnit）
 tools/                 publish.ps1、アイコン生成スクリプト
-THIRD-PARTY-NOTICES.txt 同梱ソフトウェアのライセンス表示（zip に入れて配布）
+docs/design.md         設計メモ
 docs/shortcut.md       iOS ショートカットの作り方
-SPEC.md                仕様書
+THIRD-PARTY-NOTICES.txt 同梱ソフトウェアのライセンス表示（zip に入れて配布）
+global.json            テストランナーの指定
 ```
 
-- 仕様：[SPEC.md](SPEC.md)
+- 設計メモ：[docs/design.md](docs/design.md)
 - ライセンス：未定

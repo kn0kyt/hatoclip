@@ -1,6 +1,6 @@
 namespace Hatoclip;
 
-/// <summary>Confirms and performs connection-key regeneration (SPEC 3.2). UI thread only.</summary>
+/// <summary>Confirms and performs connection-key regeneration. UI thread only.</summary>
 public sealed class KeyRegenerator
 {
     private readonly ConfigStore _config;

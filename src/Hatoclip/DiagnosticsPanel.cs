@@ -1,6 +1,6 @@
 namespace Hatoclip;
 
-/// <summary>Network diagnostics messages (Japanese) shown in the QR window (SPEC 3.3).</summary>
+/// <summary>Network diagnostics messages (Japanese) shown in the QR window (see docs/design.md).</summary>
 public sealed class DiagnosticsPanel : FlowLayoutPanel
 {
     private static readonly Color OkColor = Color.FromArgb(0, 120, 60);

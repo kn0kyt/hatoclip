@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Hatoclip;
 
 /// <summary>
-/// "接続用QRコード" window (SPEC 3.3): QR of the connection URL, the URL as text (IP and .local
+/// "接続用QRコード" window: QR of the connection URL, the URL as text (IP and .local
 /// variants) with copy buttons, network diagnostics, and key regeneration. Closing only hides it.
 /// </summary>
 public sealed class QrWindow : Form

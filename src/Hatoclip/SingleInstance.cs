@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Hatoclip;
 
 /// <summary>
-/// Per-session single-instance guard (SPEC 3.1). The first instance owns a named mutex and waits on a
+/// Per-session single-instance guard. The first instance owns a named mutex and waits on a
 /// named event; a second instance sets the event (asking the first to show its QR window) and exits.
 /// </summary>
 public sealed class SingleInstance : IDisposable

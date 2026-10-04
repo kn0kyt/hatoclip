@@ -31,7 +31,7 @@ public enum FirewallStatus
 }
 
 /// <summary>
-/// Read-only network diagnostics for the QR window (SPEC 3.3): network category (Public/Private) via
+/// Read-only network diagnostics for the QR window (see docs/design.md): network category (Public/Private) via
 /// the Network List Manager COM API, and a best-effort Windows Firewall rule check via the registry.
 /// Never modifies any system setting; every failure degrades to "Unknown".
 /// </summary>

@@ -26,7 +26,7 @@ public sealed record LanSelection(LanCandidate? Best, IReadOnlyList<LanCandidate
     public bool HasAddress => Best is not null;
 }
 
-/// <summary>LAN IPv4 discovery for the connection URL (SPEC 3.3).</summary>
+/// <summary>LAN IPv4 discovery for the connection URL (selection rules: docs/design.md).</summary>
 public static class NetworkInfo
 {
     /// <summary>

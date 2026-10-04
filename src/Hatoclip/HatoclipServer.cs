@@ -65,7 +65,7 @@ public sealed class HatoclipServer : IAsyncDisposable
     private WebApplication? _app;
 
     /// <param name="listenAddress">
-    /// Address to listen on; null = 0.0.0.0 (SPEC 3.4). Tests pass loopback so that no firewall prompt appears.
+    /// Address to listen on; null = 0.0.0.0 (IPv4 any). Tests pass loopback so that no firewall prompt appears.
     /// </param>
     public HatoclipServer(ConfigStore config, IClipboardService clipboard, AuthRateLimiter rateLimiter, IPAddress? listenAddress = null)
     {
@@ -185,7 +185,7 @@ public sealed class HatoclipServer : IAsyncDisposable
         builder.WebHost.ConfigureKestrel(options =>
         {
             options.AddServerHeader = false;
-            // IPv4 only (SPEC 3.4: 0.0.0.0). ListenAnyIP would bind [::] dual-mode and also accept IPv6.
+            // IPv4 only (0.0.0.0). ListenAnyIP would bind [::] dual-mode and also accept IPv6.
             options.Listen(_listenAddress, port);
         });
 

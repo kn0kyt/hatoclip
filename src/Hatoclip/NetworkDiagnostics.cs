@@ -155,49 +155,55 @@ public static class NetworkDiagnostics
                 return FirewallStatus.Unknown;
             }
 
-            var profile = category switch
-            {
-                NetworkCategory.Public => "Public",
-                NetworkCategory.Private => "Private",
-                NetworkCategory.Domain => "Domain",
-                _ => null,
-            };
-
-            var allowed = false;
-            var blocked = false;
-            foreach (var name in rules.GetValueNames())
-            {
-                if (rules.GetValue(name) is not string data)
-                {
-                    continue;
-                }
-
-                var rule = FirewallRule.Parse(data);
-                if (!rule.IsActiveInbound || !rule.AppliesToProfile(profile) || !rule.AllowsTcp)
-                {
-                    continue;
-                }
-
-                var matchesApp = rule.App is { } app && PathsEqual(app, exePath);
-                var matchesPort = rule.App is null && rule.MatchesLocalPort(port);
-                if (rule.IsAllow && (matchesApp || matchesPort))
-                {
-                    allowed = true;
-                }
-                else if (rule.IsBlock && matchesApp)
-                {
-                    blocked = true;
-                }
-            }
-
-            // Block rules win over Allow rules in Windows Firewall.
-            return blocked ? FirewallStatus.Blocked : allowed ? FirewallStatus.Allowed : FirewallStatus.NotAllowed;
+            var ruleStrings = rules.GetValueNames().Select(name => rules.GetValue(name)).OfType<string>();
+            return EvaluateRules(ruleStrings, exePath, port, category);
         }
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
             Log.Warn($"Firewall rules could not be read ({ex.GetType().Name}).");
             return FirewallStatus.Unknown;
         }
+    }
+
+    /// <summary>
+    /// Decides from firewall rule strings ("v2.x|Action=Allow|Active=TRUE|Dir=In|...") whether inbound TCP
+    /// to <paramref name="exePath"/> / <paramref name="port"/> is allowed on the given profile. Returns
+    /// Allowed, Blocked or NotAllowed (the firewall-off and unreadable cases are handled by the caller).
+    /// </summary>
+    internal static FirewallStatus EvaluateRules(IEnumerable<string> ruleStrings, string exePath, int port, NetworkCategory category)
+    {
+        var profile = category switch
+        {
+            NetworkCategory.Public => "Public",
+            NetworkCategory.Private => "Private",
+            NetworkCategory.Domain => "Domain",
+            _ => null,
+        };
+
+        var allowed = false;
+        var blocked = false;
+        foreach (var data in ruleStrings)
+        {
+            var rule = FirewallRule.Parse(data);
+            if (!rule.IsActiveInbound || !rule.AppliesToProfile(profile) || !rule.AllowsTcp)
+            {
+                continue;
+            }
+
+            var matchesApp = rule.App is { } app && PathsEqual(app, exePath);
+            var matchesPort = rule.App is null && rule.MatchesLocalPort(port);
+            if (rule.IsAllow && (matchesApp || matchesPort))
+            {
+                allowed = true;
+            }
+            else if (rule.IsBlock && matchesApp)
+            {
+                blocked = true;
+            }
+        }
+
+        // Block rules win over Allow rules in Windows Firewall.
+        return blocked ? FirewallStatus.Blocked : allowed ? FirewallStatus.Allowed : FirewallStatus.NotAllowed;
     }
 
     private static bool IsFirewallDisabled(RegistryKey policy, NetworkCategory category)

@@ -1,11 +1,12 @@
 namespace Hatoclip;
 
-/// <summary>Task-tray UI: NotifyIcon, context menu, receive notifications and the QR window.</summary>
+/// <summary>Task-tray UI: NotifyIcon, context menu, receive/read indications and the QR window.</summary>
 public sealed class TrayApplicationContext : ApplicationContext
 {
+    internal const string ReceivedMessage = "スマホから鳩が届きました";
     private const int PreviewLength = 40;
     private const int MaxTooltipLength = 63;
-    private static readonly TimeSpan ReceivedIconDuration = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan TransientIconDuration = TimeSpan.FromSeconds(3);
 
     private readonly ConfigStore _config;
     private readonly HatoclipServer _server;
@@ -15,9 +16,12 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly NotifyIcon _notifyIcon;
     private readonly Icon _idleIcon;
     private readonly Icon _receivedIcon;
-    private readonly System.Windows.Forms.Timer _receivedIconTimer;
+    private readonly Icon _sentIcon;
+    private readonly System.Windows.Forms.Timer _transientIconTimer;
     private readonly ToolStripMenuItem _autoStartItem;
     private readonly ToolStripMenuItem _allowGetItem;
+    private readonly ToolStripMenuItem _showPreviewItem;
+    private readonly ToolStripMenuItem _excludeFromHistoryItem;
     private readonly Font _boldMenuFont;
     private QrWindow? _qrWindow;
 
@@ -39,12 +43,26 @@ public sealed class TrayApplicationContext : ApplicationContext
             Checked = _config.Current.AllowGet,
         };
         _allowGetItem.CheckedChanged += (_, _) => ToggleAllowGet(_allowGetItem.Checked);
+        _showPreviewItem = new ToolStripMenuItem("通知に内容を表示")
+        {
+            CheckOnClick = true,
+            Checked = _config.Current.ShowPreview,
+        };
+        _showPreviewItem.CheckedChanged += (_, _) => ToggleShowPreview(_showPreviewItem.Checked);
+        _excludeFromHistoryItem = new ToolStripMenuItem("履歴と同期に残さない")
+        {
+            CheckOnClick = true,
+            Checked = _config.Current.ExcludeFromHistory,
+        };
+        _excludeFromHistoryItem.CheckedChanged += (_, _) => ToggleExcludeFromHistory(_excludeFromHistoryItem.Checked);
         var regenerateItem = new ToolStripMenuItem("接続キーを再生成...", null, (_, _) => RegenerateKey(_qrWindow is { Visible: true } w ? w : null));
 
         menu.Items.Add(showQrItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_autoStartItem);
         menu.Items.Add(_allowGetItem);
+        menu.Items.Add(_showPreviewItem);
+        menu.Items.Add(_excludeFromHistoryItem);
         menu.Items.Add(regenerateItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("終了", null, (_, _) => ExitThread());
@@ -52,10 +70,13 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _idleIcon = TrayIcons.LoadIdle();
         _receivedIcon = TrayIcons.LoadReceived();
-        _receivedIconTimer = new System.Windows.Forms.Timer { Interval = (int)ReceivedIconDuration.TotalMilliseconds };
-        _receivedIconTimer.Tick += (_, _) =>
+        _sentIcon = TrayIcons.LoadSent();
+        // One timer for both transient icons: the latest event wins and restarts the countdown, so
+        // there is exactly one revert to idle.
+        _transientIconTimer = new System.Windows.Forms.Timer { Interval = (int)TransientIconDuration.TotalMilliseconds };
+        _transientIconTimer.Tick += (_, _) =>
         {
-            _receivedIconTimer.Stop();
+            _transientIconTimer.Stop();
             _notifyIcon!.Icon = _idleIcon;
         };
 
@@ -70,6 +91,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _monitor.Changed += OnConnectionChanged;
         _server.TextReceived += OnTextReceived;
+        _server.ClipboardRead += OnClipboardRead;
 
         UpdateStaleAutoStart();
 
@@ -107,6 +129,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         _server.TextReceived -= OnTextReceived;
+        _server.ClipboardRead -= OnClipboardRead;
         _monitor.Changed -= OnConnectionChanged;
         _notifyIcon.Visible = false;
         _qrWindow?.CloseForExit();
@@ -119,11 +142,12 @@ public sealed class TrayApplicationContext : ApplicationContext
         {
             _qrWindow?.Dispose();
             _monitor.Dispose();
-            _receivedIconTimer.Dispose();
+            _transientIconTimer.Dispose();
             _notifyIcon.ContextMenuStrip?.Dispose();
             _notifyIcon.Dispose();
             _idleIcon.Dispose();
             _receivedIcon.Dispose();
+            _sentIcon.Dispose();
             _boldMenuFont.Dispose();
         }
 
@@ -135,8 +159,8 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void OnTextReceived(object? sender, string text)
     {
-        // Raised on a Kestrel thread; build the preview here, update the UI on the UI thread.
-        var preview = MakePreview(text);
+        // Raised on a Kestrel thread; build the balloon text here, update the UI on the UI thread.
+        var message = BuildReceivedMessage(text, _config.Current.ShowPreview);
         _ui.Post(() =>
         {
             if (!_notifyIcon.Visible)
@@ -144,11 +168,32 @@ public sealed class TrayApplicationContext : ApplicationContext
                 return;
             }
 
-            _notifyIcon.Icon = _receivedIcon;
-            _receivedIconTimer.Stop();
-            _receivedIconTimer.Start();
-            _notifyIcon.ShowBalloonTip(3000, "Hatoclip", $"スマホから鳩が届きました\n{preview}", ToolTipIcon.None);
+            ShowTransientIcon(_receivedIcon);
+            _notifyIcon.ShowBalloonTip(3000, "Hatoclip", message, ToolTipIcon.None);
         });
+    }
+
+    /// <summary>
+    /// A phone fetched the PC clipboard: switch the icon briefly (no balloon), so that a read with a
+    /// leaked key does not go unnoticed. Raised on a Kestrel thread.
+    /// </summary>
+    private void OnClipboardRead(object? sender, EventArgs e)
+    {
+        _ui.Post(() =>
+        {
+            if (_notifyIcon.Visible)
+            {
+                ShowTransientIcon(_sentIcon);
+            }
+        });
+    }
+
+    /// <summary>Shows <paramref name="icon"/> for <see cref="TransientIconDuration"/>, then idle. UI thread only.</summary>
+    private void ShowTransientIcon(Icon icon)
+    {
+        _notifyIcon.Icon = icon;
+        _transientIconTimer.Stop();
+        _transientIconTimer.Start();
     }
 
     private void RegenerateKey(IWin32Window? owner) => _keyRegenerator.ConfirmAndRegenerate(owner);
@@ -157,6 +202,18 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         _config.Update(c => c.AllowGet = allow);
         Log.Info($"allowGet set to {allow}.");
+    }
+
+    private void ToggleShowPreview(bool show)
+    {
+        _config.Update(c => c.ShowPreview = show);
+        Log.Info($"showPreview set to {show}.");
+    }
+
+    private void ToggleExcludeFromHistory(bool exclude)
+    {
+        _config.Update(c => c.ExcludeFromHistory = exclude);
+        Log.Info($"excludeFromHistory set to {exclude}.");
     }
 
     private void ToggleAutoStart()
@@ -218,7 +275,11 @@ public sealed class TrayApplicationContext : ApplicationContext
         return text.Length <= MaxTooltipLength ? text : text[..(MaxTooltipLength - 1)] + "…";
     }
 
-    private static string MakePreview(string text)
+    /// <summary>Balloon text for received text: the fixed message, plus a preview line when enabled.</summary>
+    internal static string BuildReceivedMessage(string text, bool showPreview) =>
+        showPreview ? $"{ReceivedMessage}\n{MakePreview(text)}" : ReceivedMessage;
+
+    internal static string MakePreview(string text)
     {
         var collapsed = string.Join(' ', text.Split(['\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)).Trim();
         if (collapsed.Length == 0)

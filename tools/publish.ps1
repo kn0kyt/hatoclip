@@ -5,6 +5,7 @@
 # Output (under the repo root, gitignored):
 #   publish\win-x64\Hatoclip.exe     publish\Hatoclip-<version>-win-x64.zip
 #   publish\win-arm64\Hatoclip.exe   publish\Hatoclip-<version>-win-arm64.zip
+# Each zip holds Hatoclip.exe and THIRD-PARTY-NOTICES.txt (copied from the repo root).
 #
 # Works in Windows PowerShell 5.1 and PowerShell 7.
 
@@ -18,6 +19,11 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repoRoot 'src\Hatoclip\Hatoclip.csproj'
 $publishRoot = Join-Path $repoRoot 'publish'
+$noticesName = 'THIRD-PARTY-NOTICES.txt'
+$notices = Join-Path $repoRoot $noticesName
+if (-not (Test-Path -LiteralPath $notices)) {
+    throw "$noticesName not found in $repoRoot"
+}
 
 # Version comes from <Version> in the csproj.
 [xml] $projectXml = Get-Content -LiteralPath $project -Encoding UTF8
@@ -54,6 +60,11 @@ foreach ($rid in $RuntimeIdentifiers) {
         Write-Warning ("Publish output for $rid contains extra files (included in the zip): " +
             (($extra | ForEach-Object { $_.FullName.Substring($outDir.Length + 1) }) -join ', '))
     }
+
+    # License notices of the bundled runtime and QRCoder go next to the exe (checked above that
+    # dotnet publish itself produced nothing else).
+    Copy-Item -LiteralPath $notices -Destination (Join-Path $outDir $noticesName)
+    $files = @(Get-ChildItem -LiteralPath $outDir -File -Recurse)
 
     $zip = Join-Path $publishRoot "Hatoclip-$version-$rid.zip"
     if (Test-Path -LiteralPath $zip) {

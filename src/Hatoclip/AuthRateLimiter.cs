@@ -26,6 +26,18 @@ public sealed class AuthRateLimiter
         _lastPrune = _time.GetUtcNow();
     }
 
+    /// <summary>Number of tracked addresses (for tests).</summary>
+    internal int EntryCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _entries.Count;
+            }
+        }
+    }
+
     public bool IsBlocked(IPAddress? ip)
     {
         lock (_gate)

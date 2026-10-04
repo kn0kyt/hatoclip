@@ -114,13 +114,17 @@ public static class NetworkInfo
                 hasGateway, IsPhysicalType(nic.NetworkInterfaceType), isBestRoute));
         }
 
-        var ordered = candidates
+        var ordered = OrderCandidates(candidates);
+        return new LanSelection(ordered.FirstOrDefault(), ordered, excluded);
+    }
+
+    /// <summary>Best first: has gateway &gt; physical type &gt; preferred by the routing table (stable otherwise).</summary>
+    internal static List<LanCandidate> OrderCandidates(IEnumerable<LanCandidate> candidates) =>
+        candidates
             .OrderByDescending(c => c.HasGateway)
             .ThenByDescending(c => c.IsPhysicalType)
             .ThenByDescending(c => c.IsBestRoute)
             .ToList();
-        return new LanSelection(ordered.FirstOrDefault(), ordered, excluded);
-    }
 
     private static string GetHostName()
     {
@@ -142,12 +146,15 @@ public static class NetworkInfo
 
     public static string BuildConnectUrl(string host, int port, string key) => $"http://{host}:{port}/#k={key}";
 
-    private static bool IsVirtualAdapter(NetworkInterface nic) =>
-        VirtualAdapterKeywords.Any(k =>
-            nic.Name.Contains(k, StringComparison.OrdinalIgnoreCase) ||
-            nic.Description.Contains(k, StringComparison.OrdinalIgnoreCase));
+    private static bool IsVirtualAdapter(NetworkInterface nic) => IsVirtualAdapter(nic.Name, nic.Description);
 
-    private static bool IsPhysicalType(NetworkInterfaceType type) => type is
+    /// <summary>True if the adapter name or description contains a <see cref="VirtualAdapterKeywords"/> entry.</summary>
+    internal static bool IsVirtualAdapter(string name, string description) =>
+        VirtualAdapterKeywords.Any(k =>
+            name.Contains(k, StringComparison.OrdinalIgnoreCase) ||
+            description.Contains(k, StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsPhysicalType(NetworkInterfaceType type) => type is
         NetworkInterfaceType.Ethernet or NetworkInterfaceType.Wireless80211 or NetworkInterfaceType.GigabitEthernet or
         NetworkInterfaceType.FastEthernetT or NetworkInterfaceType.FastEthernetFx or NetworkInterfaceType.Ethernet3Megabit;
 

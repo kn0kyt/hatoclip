@@ -3,8 +3,17 @@ using System.Runtime.InteropServices;
 namespace Hatoclip;
 
 /// <summary>Text-only clipboard access. Every clipboard call is executed on the UI (STA) thread.</summary>
-public sealed class ClipboardService
+public sealed class ClipboardService : IClipboardService
 {
+    /// <summary>Any data: clipboard managers / history should ignore this content.</summary>
+    public const string ExcludeFromMonitorFormat = "ExcludeClipboardContentFromMonitorProcessing";
+
+    /// <summary>DWORD 0: do not add this content to Windows clipboard history (Win+V).</summary>
+    public const string CanIncludeInHistoryFormat = "CanIncludeInClipboardHistory";
+
+    /// <summary>DWORD 0: do not sync this content to the cloud clipboard.</summary>
+    public const string CanUploadToCloudFormat = "CanUploadToCloudClipboard";
+
     private const int MaxAttempts = 5;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(80);
 
@@ -15,10 +24,11 @@ public sealed class ClipboardService
         _ui = ui;
     }
 
-    /// <summary>Sets non-empty text (Clipboard.SetText rejects an empty string).</summary>
-    public Task SetTextAsync(string text) => WithRetryAsync(() =>
+    /// <summary>Sets non-empty text (an empty string would clear the clipboard; the server rejects it).</summary>
+    public Task SetTextAsync(string text, bool excludeFromHistory) => WithRetryAsync(() =>
     {
-        Clipboard.SetText(text, TextDataFormat.UnicodeText);
+        // copy: true keeps the data on the clipboard after the app exits (same as Clipboard.SetText).
+        Clipboard.SetDataObject(CreateTextDataObject(text, excludeFromHistory), copy: true);
         return true;
     });
 
@@ -34,6 +44,30 @@ public sealed class ClipboardService
         var hasData = data is not null && data.GetFormats().Length > 0;
         return ("", hasData ? "non-text" : "text");
     });
+
+    /// <summary>
+    /// Unicode text, plus, when <paramref name="excludeFromHistory"/> is set, the documented clipboard
+    /// formats that keep it out of clipboard history and cloud sync
+    /// (https://learn.microsoft.com/windows/win32/dataxchg/clipboard-formats#cloud-clipboard-and-clipboard-history-formats).
+    /// Streams are placed on the clipboard as raw HGLOBAL bytes.
+    /// </summary>
+    public static DataObject CreateTextDataObject(string text, bool excludeFromHistory)
+    {
+        var data = new DataObject();
+        // Same as Clipboard.SetText(text, UnicodeText): CF_UNICODETEXT only; Windows synthesizes
+        // CF_TEXT / CF_OEMTEXT for programs that ask for ANSI text.
+        data.SetData(DataFormats.UnicodeText, false, text);
+        if (excludeFromHistory)
+        {
+            data.SetData(ExcludeFromMonitorFormat, false, DwordZero());
+            data.SetData(CanIncludeInHistoryFormat, false, DwordZero());
+            data.SetData(CanUploadToCloudFormat, false, DwordZero());
+        }
+
+        return data;
+    }
+
+    private static MemoryStream DwordZero() => new(BitConverter.GetBytes(0));
 
     private async Task<T> WithRetryAsync<T>(Func<T> op)
     {

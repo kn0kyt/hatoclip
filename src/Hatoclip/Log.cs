@@ -26,6 +26,9 @@ public static class Log
     private static long _writerBytes;
     private static bool _limitReached;
 
+    /// <summary>False disables all file output (the unit tests turn it off). Defaults to true.</summary>
+    internal static bool Enabled { get; set; } = true;
+
     public static void Info(string message) => Write("INFO", message);
 
     public static void Warn(string message) => Write("WARN", message);
@@ -35,6 +38,11 @@ public static class Log
 
     public static void Write(string level, string message)
     {
+        if (!Enabled)
+        {
+            return;
+        }
+
         try
         {
             var now = DateTime.Now;

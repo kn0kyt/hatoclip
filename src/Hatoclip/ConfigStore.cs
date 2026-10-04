@@ -56,7 +56,7 @@ public sealed class ConfigStore
                 try
                 {
                     loaded = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions);
-                    missingKeys = loaded is not null && HasMissingShortcutKeys(json);
+                    missingKeys = loaded is not null && HasMissingOptionalKeys(json);
                 }
                 catch (JsonException ex)
                 {
@@ -75,8 +75,8 @@ public sealed class ConfigStore
             }
 
             var config = loaded ?? new AppConfig();
-            // Write back a config from an older version so the user can see where the optional
-            // shortcut URLs go.
+            // Write back a config from an older version so the user can see every setting (new
+            // settings with their defaults, and where the optional shortcut URLs go).
             var dirty = loaded is null || missingKeys;
 
             config.ShortcutSendUrl ??= ""; // "null" in the file
@@ -135,12 +135,12 @@ public sealed class ConfigStore
     /// <summary>128-bit random key as 32 lowercase hex characters.</summary>
     public static string GenerateKey() => Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
 
-    private static bool HasMissingShortcutKeys(string json)
+    private static bool HasMissingOptionalKeys(string json)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         return root.ValueKind == JsonValueKind.Object
-            && (!root.TryGetProperty("shortcutSendUrl", out _) || !root.TryGetProperty("shortcutReceiveUrl", out _));
+            && AppConfig.OptionalKeys.Any(name => !root.TryGetProperty(name, out _));
     }
 
     /// <summary>

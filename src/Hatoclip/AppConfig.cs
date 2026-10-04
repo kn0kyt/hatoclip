@@ -7,6 +7,13 @@ public sealed class AppConfig
 {
     public const int DefaultPort = 52817;
 
+    /// <summary>
+    /// JSON names of settings added after the first release. A config file lacking any of them is
+    /// written back on load so the user can see (and edit) every setting.
+    /// </summary>
+    internal static readonly string[] OptionalKeys =
+        ["showPreview", "excludeFromHistory", "shortcutSendUrl", "shortcutReceiveUrl"];
+
     [JsonPropertyName("key")]
     public string Key { get; set; } = "";
 
@@ -15,6 +22,17 @@ public sealed class AppConfig
 
     [JsonPropertyName("allowGet")]
     public bool AllowGet { get; set; } = true;
+
+    /// <summary>Show the first characters of received text in the tray notification.</summary>
+    [JsonPropertyName("showPreview")]
+    public bool ShowPreview { get; set; } = true;
+
+    /// <summary>
+    /// Place received text on the clipboard so that Windows keeps it out of clipboard history (Win+V)
+    /// and cloud clipboard sync.
+    /// </summary>
+    [JsonPropertyName("excludeFromHistory")]
+    public bool ExcludeFromHistory { get; set; }
 
     /// <summary>Set once the QR window has been shown automatically on first run.</summary>
     [JsonPropertyName("firstRunShown")]

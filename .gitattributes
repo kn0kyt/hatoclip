@@ -5,6 +5,9 @@
 *.ps1 text eol=crlf
 *.sln text eol=crlf
 
+# Shipped in the zip next to Hatoclip.exe (UTF-8 with BOM + CRLF so that every Notepad shows it correctly).
+THIRD-PARTY-NOTICES.txt text eol=crlf
+
 # Binary assets.
 *.ico binary
 *.png binary

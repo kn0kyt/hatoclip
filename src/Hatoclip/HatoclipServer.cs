@@ -59,25 +59,40 @@ public sealed class HatoclipServer : IAsyncDisposable
     };
 
     private readonly ConfigStore _config;
-    private readonly ClipboardService _clipboard;
+    private readonly IClipboardService _clipboard;
     private readonly AuthRateLimiter _rateLimiter;
+    private readonly IPAddress _listenAddress;
     private WebApplication? _app;
 
-    public HatoclipServer(ConfigStore config, ClipboardService clipboard, AuthRateLimiter rateLimiter)
+    /// <param name="listenAddress">
+    /// Address to listen on; null = 0.0.0.0 (SPEC 3.4). Tests pass loopback so that no firewall prompt appears.
+    /// </param>
+    public HatoclipServer(ConfigStore config, IClipboardService clipboard, AuthRateLimiter rateLimiter, IPAddress? listenAddress = null)
     {
         _config = config;
         _clipboard = clipboard;
         _rateLimiter = rateLimiter;
+        _listenAddress = listenAddress ?? IPAddress.Any;
     }
 
     /// <summary>Raised (on a server thread) after text from the phone has been placed on the PC clipboard.</summary>
     public event EventHandler<string>? TextReceived;
 
+    /// <summary>
+    /// Raised (on a server thread) after a phone has read the PC clipboard (200 response), so the PC
+    /// can show that it happened. Carries no content.
+    /// </summary>
+    public event EventHandler? ClipboardRead;
+
     public int Port { get; private set; }
 
     public bool IsRunning => _app is not null;
 
-    /// <summary>Starts listening on the configured port, or the next free port above it (persisted to config).</summary>
+    /// <summary>
+    /// Starts listening on the configured port or, if that is unavailable, on the next free port above
+    /// it for this run only. The fallback is never saved, so the next start tries the usual port again
+    /// and bookmarks / Shortcuts work again once the collision is gone.
+    /// </summary>
     public async Task StartAsync()
     {
         if (_app is not null)
@@ -108,11 +123,10 @@ public sealed class HatoclipServer : IAsyncDisposable
             Port = port;
             if (port != firstPort)
             {
-                _config.Update(c => c.Port = port);
-                Log.Info($"Configured port {firstPort} was unavailable; saved port {port} to config.");
+                Log.Warn($"Configured port {firstPort} was unavailable; using port {port} for this run only (not saved).");
             }
 
-            Log.Info($"Server started on 0.0.0.0:{port}.");
+            Log.Info($"Server started on {_listenAddress}:{port}.");
             return;
         }
 
@@ -172,7 +186,7 @@ public sealed class HatoclipServer : IAsyncDisposable
         {
             options.AddServerHeader = false;
             // IPv4 only (SPEC 3.4: 0.0.0.0). ListenAnyIP would bind [::] dual-mode and also accept IPv6.
-            options.Listen(IPAddress.Any, port);
+            options.Listen(_listenAddress, port);
         });
 
         // Bind with SO_EXCLUSIVEADDRUSE so that (a) a port already held by another process reliably
@@ -219,7 +233,7 @@ public sealed class HatoclipServer : IAsyncDisposable
         });
     }
 
-    private static string SanitizeLinkUrl(string? value)
+    internal static string SanitizeLinkUrl(string? value)
     {
         var trimmed = value?.Trim();
         if (string.IsNullOrEmpty(trimmed)
@@ -431,7 +445,7 @@ public sealed class HatoclipServer : IAsyncDisposable
 
         try
         {
-            await _clipboard.SetTextAsync(text);
+            await _clipboard.SetTextAsync(text, _config.Current.ExcludeFromHistory);
         }
         catch (ExternalException ex)
         {
@@ -461,6 +475,15 @@ public sealed class HatoclipServer : IAsyncDisposable
         try
         {
             var (text, type) = await _clipboard.GetTextAsync();
+            try
+            {
+                ClipboardRead?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("ClipboardRead handler failed.", ex);
+            }
+
             return Json(200, new { ok = true, text, type });
         }
         catch (ExternalException ex)

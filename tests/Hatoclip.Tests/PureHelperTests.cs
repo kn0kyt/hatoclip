@@ -82,13 +82,13 @@ public sealed class ReceivedNotificationTests
     [Fact]
     public void Preview_off_shows_only_the_fixed_message()
     {
-        Assert.Equal("スマホから鳩が届きました", TrayApplicationContext.BuildReceivedMessage("secret text", showPreview: false));
+        Assert.Equal("鳩がテキストを届けました", TrayApplicationContext.BuildReceivedMessage("secret text", showPreview: false));
     }
 
     [Fact]
     public void Preview_on_appends_the_collapsed_text()
     {
-        Assert.Equal("スマホから鳩が届きました\nline1 line2",
+        Assert.Equal("鳩がテキストを届けました\nline1 line2",
             TrayApplicationContext.BuildReceivedMessage("line1\r\nline2\n", showPreview: true));
     }
 
@@ -169,5 +169,37 @@ public sealed class TrayIconAssetTests
 
         Assert.NotEqual(EmbeddedAssets.GetAsset("hatoclip.ico"), sent);
         Assert.NotEqual(EmbeddedAssets.GetAsset("hatoclip-received.ico"), sent);
+    }
+}
+
+public sealed class AutoStartTests
+{
+    private const string Current = @"C:\Apps\Hatoclip\Hatoclip.exe";
+    private const string Other = @"C:\Old\Hatoclip.exe";
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("\"" + Current + "\"")]
+    [InlineData(@"""C:\APPS\hatoclip\HATOCLIP.EXE""")]
+    public void No_entry_or_an_entry_for_this_exe_is_neither_stale_nor_orphaned(string? command)
+    {
+        Assert.False(AutoStart.IsStale(command, Current));
+        Assert.False(AutoStart.IsOrphaned(command, Current, _ => false));
+    }
+
+    [Fact]
+    public void Entry_for_another_copy_that_still_exists_is_stale_but_not_orphaned()
+    {
+        var command = "\"" + Other + "\"";
+
+        Assert.True(AutoStart.IsStale(command, Current));
+        Assert.False(AutoStart.IsOrphaned(command, Current, path => path == Other));
+    }
+
+    [Fact]
+    public void Entry_for_an_exe_that_is_gone_is_orphaned()
+    {
+        Assert.True(AutoStart.IsOrphaned("\"" + Other + "\"", Current, _ => false));
     }
 }

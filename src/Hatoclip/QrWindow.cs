@@ -4,13 +4,16 @@ namespace Hatoclip;
 
 /// <summary>
 /// "接続用QRコード" window: QR of the connection URL, the URL as text (IP and .local
-/// variants) with copy buttons, network diagnostics, and key regeneration. Closing only hides it.
+/// variants) with copy buttons, a "phone connected" line, network diagnostics, and key regeneration.
+/// Closing only hides it.
 /// </summary>
 public sealed class QrWindow : Form
 {
     private const int ContentWidth = 540; // logical (96 DPI) pixels
     private const int CopyButtonWidth = 96;
     private const int QrSize = 300;
+    private const string PhoneConnectedText = "✓ スマホが接続しました";
+    private static readonly Color PhoneConnectedColor = Color.FromArgb(0, 120, 60); // same green as DiagnosticsPanel
 
     private readonly ConnectionMonitor _monitor;
     private readonly Action<IWin32Window> _regenerateKey;
@@ -19,9 +22,12 @@ public sealed class QrWindow : Form
     private readonly TextBox _localUrlBox;
     private readonly Button _ipCopyButton;
     private readonly Button _closeButton;
+    private readonly Label _phoneConnectedLabel;
     private readonly DiagnosticsPanel _diagnostics;
     private readonly Icon _icon;
+    private readonly Font _boldFont;
     private bool _allowClose;
+    private string? _displayedKey;
 
     public QrWindow(ConnectionMonitor monitor, Action<IWin32Window> regenerateKey)
     {
@@ -68,10 +74,23 @@ public sealed class QrWindow : Form
             SizeMode = PictureBoxSizeMode.CenterImage,
             BackColor = Color.White,
             Anchor = AnchorStyles.None,
-            Margin = new Padding(0, 0, 0, 8),
+            Margin = new Padding(0, 0, 0, 4),
             AccessibleName = "接続用QRコード",
         };
         root.Controls.Add(_qrBox);
+
+        // Empty until a phone connects. Its line height is reserved in OnLoad, so filling it in or
+        // clearing it does not move the rest of the window.
+        _boldFont = new Font(Font, FontStyle.Bold);
+        _phoneConnectedLabel = new Label
+        {
+            AutoSize = true,
+            Font = _boldFont,
+            ForeColor = PhoneConnectedColor,
+            Anchor = AnchorStyles.None,
+            Margin = new Padding(0, 0, 0, 4),
+        };
+        root.Controls.Add(_phoneConnectedLabel);
 
         (_ipUrlBox, _ipCopyButton) = AddUrlRow(root, "URL（IP アドレス）");
         (_localUrlBox, _) = AddUrlRow(root, "URL（PC 名 .local 版）");
@@ -125,6 +144,12 @@ public sealed class QrWindow : Form
         BeginInvoke(() => TopMost = false);
     }
 
+    /// <summary>
+    /// Shows "✓ スマホが接続しました" (a phone with the current key opened the page). It stays until
+    /// the window is shown again or the key changes. UI thread only.
+    /// </summary>
+    public void ShowPhoneConnected() => _phoneConnectedLabel.Text = PhoneConnectedText;
+
     /// <summary>Allows the window to really close (application exit).</summary>
     public void CloseForExit()
     {
@@ -135,6 +160,14 @@ public sealed class QrWindow : Form
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+
+        // Reserve the height of the "phone connected" line (measured with the final font after DPI
+        // scaling) so that showing or clearing it never makes the window jump. WinForms rescales
+        // MinimumSize when the window moves to a monitor with another DPI.
+        _phoneConnectedLabel.Text = PhoneConnectedText;
+        _phoneConnectedLabel.MinimumSize = new Size(0, _phoneConnectedLabel.PreferredHeight);
+        _phoneConnectedLabel.Text = "";
+
         Display(_monitor.Current);
     }
 
@@ -149,6 +182,7 @@ public sealed class QrWindow : Form
         base.OnVisibleChanged(e);
         if (Visible)
         {
+            _phoneConnectedLabel.Text = ""; // only report phones that connect while the window is showing
             _monitor.RequestRefresh(); // pick up changes that happened while hidden
         }
     }
@@ -172,6 +206,7 @@ public sealed class QrWindow : Form
             _monitor.Changed -= OnSnapshotChanged;
             _qrBox.Image?.Dispose();
             _icon.Dispose();
+            _boldFont.Dispose();
         }
 
         base.Dispose(disposing);
@@ -188,6 +223,12 @@ public sealed class QrWindow : Form
     private void Display(ConnectionSnapshot s)
     {
         SuspendLayout();
+        if (_displayedKey is not null && _displayedKey != s.Key)
+        {
+            _phoneConnectedLabel.Text = ""; // that phone used the old key; the new QR has not been used yet
+        }
+
+        _displayedKey = s.Key;
         var old = _qrBox.Image;
         try
         {

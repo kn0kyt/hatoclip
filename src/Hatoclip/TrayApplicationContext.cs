@@ -3,7 +3,7 @@ namespace Hatoclip;
 /// <summary>Task-tray UI: NotifyIcon, context menu, receive/read indications and the QR window.</summary>
 public sealed class TrayApplicationContext : ApplicationContext
 {
-    internal const string ReceivedMessage = "スマホから鳩が届きました";
+    internal const string ReceivedMessage = "鳩がテキストを届けました";
     private const int PreviewLength = 40;
     private const int MaxTooltipLength = 63;
     private static readonly TimeSpan TransientIconDuration = TimeSpan.FromSeconds(3);
@@ -92,6 +92,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _monitor.Changed += OnConnectionChanged;
         _server.TextReceived += OnTextReceived;
         _server.ClipboardRead += OnClipboardRead;
+        _server.Pinged += OnPinged;
 
         UpdateStaleAutoStart();
 
@@ -130,6 +131,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         _server.TextReceived -= OnTextReceived;
         _server.ClipboardRead -= OnClipboardRead;
+        _server.Pinged -= OnPinged;
         _monitor.Changed -= OnConnectionChanged;
         _notifyIcon.Visible = false;
         _qrWindow?.CloseForExit();
@@ -188,6 +190,21 @@ public sealed class TrayApplicationContext : ApplicationContext
         });
     }
 
+    /// <summary>
+    /// A phone with the right key opened the page: tell the QR window (if it is showing) so the user
+    /// sees that scanning worked. Raised on a Kestrel thread.
+    /// </summary>
+    private void OnPinged(object? sender, EventArgs e)
+    {
+        _ui.Post(() =>
+        {
+            if (_qrWindow is { IsDisposed: false, Visible: true } window)
+            {
+                window.ShowPhoneConnected();
+            }
+        });
+    }
+
     /// <summary>Shows <paramref name="icon"/> for <see cref="TransientIconDuration"/>, then idle. UI thread only.</summary>
     private void ShowTransientIcon(Icon icon)
     {
@@ -239,15 +256,22 @@ public sealed class TrayApplicationContext : ApplicationContext
         _autoStartItem.Checked = SafeIsAutoStartEnabled();
     }
 
-    /// <summary>Autostart is on but points at an old exe location (the exe was moved): re-point it here.</summary>
+    /// <summary>
+    /// Autostart is on but points at an exe that no longer exists (the exe was moved): re-point it here.
+    /// An entry whose exe still exists belongs to another copy and is left alone.
+    /// </summary>
     private static void UpdateStaleAutoStart()
     {
         try
         {
-            if (AutoStart.IsStale())
+            if (AutoStart.IsOrphaned())
             {
                 AutoStart.Enable();
-                Log.Info("Autostart entry pointed to a different exe path; updated it to the current exe.");
+                Log.Info("Autostart entry pointed to an exe that no longer exists; updated it to the current exe.");
+            }
+            else if (AutoStart.IsStale())
+            {
+                Log.Info("Autostart entry points to another copy of the exe that still exists; left unchanged.");
             }
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)

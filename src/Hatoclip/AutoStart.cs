@@ -16,12 +16,22 @@ public static class AutoStart
     public static bool IsEnabled() => !string.IsNullOrWhiteSpace(GetRegisteredCommand());
 
     /// <summary>True if an entry exists but points somewhere other than <paramref name="exePath"/> (the exe was moved).</summary>
-    public static bool IsStale(string? exePath = null)
-    {
-        var command = GetRegisteredCommand();
-        return !string.IsNullOrWhiteSpace(command) &&
-               !string.Equals(command.Trim().Trim('"'), exePath ?? CurrentExePath, StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsStale(string? exePath = null) => IsStale(GetRegisteredCommand(), exePath ?? CurrentExePath);
+
+    /// <summary>
+    /// True if the entry points at an exe that no longer exists (the exe was moved or deleted). An entry
+    /// whose exe is still there is left alone, so running another copy (a dev build, a trial download)
+    /// does not take over autostart.
+    /// </summary>
+    public static bool IsOrphaned(string? exePath = null) =>
+        IsOrphaned(GetRegisteredCommand(), exePath ?? CurrentExePath, File.Exists);
+
+    internal static bool IsStale(string? command, string exePath) =>
+        !string.IsNullOrWhiteSpace(command) &&
+        !string.Equals(command.Trim().Trim('"'), exePath, StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsOrphaned(string? command, string exePath, Func<string, bool> fileExists) =>
+        IsStale(command, exePath) && !fileExists(command!.Trim().Trim('"'));
 
     /// <summary>Registers (or re-points) the Run entry to the quoted exe path.</summary>
     public static void Enable(string? exePath = null)

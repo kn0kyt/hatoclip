@@ -42,7 +42,7 @@
     </div>
     <div class="status-row">
       <p id="status" class="status" role="status" aria-live="polite">接続を確認しています…</p>
-      <button id="reconnect-btn" type="button" class="link-btn">再接続</button>
+      <button id="reconnect-btn" type="button" class="link-btn" hidden>再接続</button>
     </div>
     <p id="notice" class="msg" role="status" aria-live="polite"></p>
   </header>
@@ -62,7 +62,8 @@
       </form>
     </section>
 
-    <section class="card" aria-labelledby="pc-to-phone">
+    <!-- .needs-key cards are hidden while there is no usable key (see app.js). -->
+    <section class="card needs-key" aria-labelledby="pc-to-phone">
       <h2 id="pc-to-phone">PC → スマホ</h2>
       <button id="fetch-btn" type="button" class="btn">PCのクリップボードを取得</button>
       <div id="fetch-result" class="result" hidden>
@@ -72,7 +73,7 @@
       <p id="fetch-msg" class="msg" role="status" aria-live="polite"></p>
     </section>
 
-    <section class="card" aria-labelledby="phone-to-pc">
+    <section class="card needs-key" aria-labelledby="phone-to-pc">
       <h2 id="phone-to-pc">スマホ → PC</h2>
       <textarea id="send-text" class="text text-large" rows="9" placeholder="ここに貼り付け" aria-label="PCに送るテキスト"></textarea>
       <button id="send-btn" type="button" class="btn">PCに送信</button>
@@ -80,7 +81,7 @@
       <p id="send-msg" class="msg" role="status" aria-live="polite"></p>
     </section>
 
-    <details class="card details">
+    <details class="card details needs-key">
       <summary>ショートカットでもっと便利に（任意）</summary>
       <div class="details-body">
         <p class="note">iPhoneの「ショートカット」アプリを使うと、ページを開かずにワンアクションで送信・受信できます。背面タップ（iPhoneの背面を2回たたく）に割り当てることもできます。</p>

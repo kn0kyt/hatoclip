@@ -201,10 +201,24 @@
 
   // ---- connection state -------------------------------------------------------------------
 
+  // kind: '' (checking) | 'ok' | 'error'. style.css draws the coloured dot before the text.
   function setStatus(text, kind) {
     var el = $('status');
     el.textContent = text;
     el.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  // The action cards (.needs-key) are hidden while there is no usable key (none stored, or the PC
+  // answered 401), so that only the setup card is shown.
+  function setCardsVisible(visible) {
+    Array.prototype.forEach.call(document.querySelectorAll('.needs-key'), function (el) {
+      el.hidden = !visible;
+    });
+  }
+
+  // 「再接続」 is offered only after a failure that a retry can fix (unreachable, 429, other errors).
+  function setReconnectVisible(visible) {
+    $('reconnect-btn').hidden = !visible;
   }
 
   function showSetup(title) {
@@ -230,26 +244,38 @@
       setStatus(MSG.statusNoKey, 'error');
       showSetup(MSG.setupNoKey);
       setActionsEnabled(false);
+      setCardsVisible(false);
+      setReconnectVisible(false);
       return Promise.resolve();
     }
 
+    // While checking, the cards and the 再接続 button keep their previous visibility (no flicker,
+    // and a pressed 再接続 keeps focus); the button is only disabled until the answer arrives.
+    var reconnect = $('reconnect-btn');
+    reconnect.disabled = true;
     setActionsEnabled(true);
     setStatus(MSG.statusChecking);
     return api('GET', '/api/ping').then(function (r) {
       if (isOk(r)) {
         setStatus((r.body.pcName || 'PC') + MSG.statusConnected, 'ok');
         $('setup').hidden = true;
+        setCardsVisible(true);
+        setReconnectVisible(false);
         setShortcutLink('shortcut-send-link', r.body.shortcutSendUrl);
         setShortcutLink('shortcut-receive-link', r.body.shortcutReceiveUrl);
       } else if (r.status === 401) {
         setStatus(MSG.statusBadKey, 'error');
         showSetup(MSG.setupBadKey);
-      } else if (r.status === 429) {
-        setStatus(MSG.tooMany, 'error');
+        setCardsVisible(false);
+        setReconnectVisible(false);
       } else {
-        setStatus(MSG.statusOffline, 'error');
+        setStatus(r.status === 429 ? MSG.tooMany : MSG.statusOffline, 'error');
+        setCardsVisible(true);
+        setReconnectVisible(true);
       }
-    });
+    }).then(done, done); // re-enable even if a handler above threw (no Promise#finally on old iOS)
+
+    function done() { reconnect.disabled = false; }
   }
 
   function saveKeyFromForm(ev) {

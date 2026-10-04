@@ -84,6 +84,12 @@ public sealed class HatoclipServer : IAsyncDisposable
     /// </summary>
     public event EventHandler? ClipboardRead;
 
+    /// <summary>
+    /// Raised (on a server thread) after an authenticated GET /api/ping, i.e. a phone with the right
+    /// key has opened the page (or reconnected), so the QR window can show that it worked. Carries no data.
+    /// </summary>
+    public event EventHandler? Pinged;
+
     public int Port { get; private set; }
 
     public bool IsRunning => _app is not null;
@@ -218,11 +224,20 @@ public sealed class HatoclipServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Connection check. Also hands the page the iOS Shortcut links from config.json (read from the
+    /// Connection check (raises <see cref="Pinged"/>). Also hands the page the iOS Shortcut links from config.json (read from the
     /// live config on every request); anything that is not an absolute http/https URL is sent as "".
     /// </summary>
     private IResult Ping()
     {
+        try
+        {
+            Pinged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Pinged handler failed.", ex);
+        }
+
         var config = _config.Current;
         return Json(200, new
         {

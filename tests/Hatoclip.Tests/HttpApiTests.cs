@@ -20,6 +20,7 @@ public sealed class HttpApiTests : IAsyncLifetime
     private HttpClient _http = null!;
     private int _reads;
     private int _received;
+    private int _pings;
 
     public async ValueTask InitializeAsync()
     {
@@ -29,6 +30,7 @@ public sealed class HttpApiTests : IAsyncLifetime
         _server = new HatoclipServer(_config, _clipboard, _limiter, IPAddress.Loopback);
         _server.ClipboardRead += (_, _) => Interlocked.Increment(ref _reads);
         _server.TextReceived += (_, _) => Interlocked.Increment(ref _received);
+        _server.Pinged += (_, _) => Interlocked.Increment(ref _pings);
         await _server.StartAsync();
         _http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{_server.Port}") };
     }
@@ -69,6 +71,28 @@ public sealed class HttpApiTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.True(json.GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Successful_ping_raises_Pinged()
+    {
+        var (status, _) = await SendAsync(Request(HttpMethod.Get, "/api/ping"));
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, _pings);
+    }
+
+    [Fact]
+    public async Task Rejected_ping_and_other_endpoints_do_not_raise_Pinged()
+    {
+        var (wrongKey, _) = await SendAsync(Request(HttpMethod.Get, "/api/ping", key: "wrong"));
+        using var noKey = await _http.GetAsync("/api/ping", TestContext.Current.CancellationToken);
+        var (clipboard, _) = await SendAsync(Request(HttpMethod.Get, "/api/clipboard"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, wrongKey);
+        Assert.Equal(HttpStatusCode.Unauthorized, noKey.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, clipboard);
+        Assert.Equal(0, _pings);
     }
 
     [Theory]

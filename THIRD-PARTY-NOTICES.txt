@@ -2,10 +2,10 @@
 ==========================================================
 
 このファイルには、Hatoclip.exe に同梱（組み込み）されているソフトウェアのライセンスを記載しています。
-Hatoclip 自体のライセンスは未定です。
+Hatoclip 自体は MIT ライセンスです（同梱の LICENSE を参照）。
 
 This file lists the licenses of the third-party software bundled in Hatoclip.exe
-(a self-contained single-file build). The license of Hatoclip itself is not yet decided.
+(a self-contained single-file build). Hatoclip itself is released under the MIT License (see the bundled LICENSE file).
 
 Contents
   1. QRCoder 1.8.0 (MIT)

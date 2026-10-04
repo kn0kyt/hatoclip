@@ -5,7 +5,7 @@
 # Output (under the repo root, gitignored):
 #   publish\win-x64\Hatoclip.exe     publish\Hatoclip-<version>-win-x64.zip
 #   publish\win-arm64\Hatoclip.exe   publish\Hatoclip-<version>-win-arm64.zip
-# Each zip holds Hatoclip.exe and THIRD-PARTY-NOTICES.txt (copied from the repo root).
+# Each zip holds Hatoclip.exe, LICENSE.txt and THIRD-PARTY-NOTICES.txt (copied from the repo root).
 #
 # Works in Windows PowerShell 5.1 and PowerShell 7.
 
@@ -61,9 +61,10 @@ foreach ($rid in $RuntimeIdentifiers) {
             (($extra | ForEach-Object { $_.FullName.Substring($outDir.Length + 1) }) -join ', '))
     }
 
-    # License notices of the bundled runtime and QRCoder go next to the exe (checked above that
+    # Hatoclip's own license and the notices of the bundled runtime and QRCoder go next to the exe (checked above that
     # dotnet publish itself produced nothing else).
     Copy-Item -LiteralPath $notices -Destination (Join-Path $outDir $noticesName)
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination (Join-Path $outDir 'LICENSE.txt')
     $files = @(Get-ChildItem -LiteralPath $outDir -File -Recurse)
 
     $zip = Join-Path $publishRoot "Hatoclip-$version-$rid.zip"

@@ -397,11 +397,11 @@ iPhone（およびスマホ全般）と Windows PC の間で、クリップボ�
 - **キーは全端末で 1 つ**で、有効期限が無い。端末ごとの取り消しはできず、再生成すると全端末がつなぎ直しになる
 - ファイアウォール診断はベストエフォート（グループポリシーや他社製ファイアウォールは判定できない）
 - コード署名をしていないので初回に SmartScreen が出る（回避手順は README）
-- プロジェクト自体のライセンスは未定
+- ライセンスは MIT（[LICENSE](../LICENSE)）。無保証で、利用は自己責任
 
 ## 12. 配布
 
-- `tools/publish.ps1` で win-x64 と win-arm64 を発行し、それぞれ `publish\Hatoclip-<version>-<rid>.zip` を作る。zip の中身は `Hatoclip.exe` と `THIRD-PARTY-NOTICES.txt`（同梱する .NET ランタイムと QRCoder のライセンス表示。[THIRD-PARTY-NOTICES.txt](../THIRD-PARTY-NOTICES.txt)）
+- `tools/publish.ps1` で win-x64 と win-arm64 を発行し、それぞれ `publish\Hatoclip-<version>-<rid>.zip` を作る。zip の中身は `Hatoclip.exe`、`LICENSE.txt`（Hatoclip 自体の MIT ライセンス）と `THIRD-PARTY-NOTICES.txt`（同梱する .NET ランタイムと QRCoder のライセンス表示。[THIRD-PARTY-NOTICES.txt](../THIRD-PARTY-NOTICES.txt)）
 - 発行設定は `src/Hatoclip/Properties/PublishProfiles/win-x64.pubxml` / `win-arm64.pubxml`：self-contained、単一ファイル、ネイティブライブラリも同梱（展開フォルダーを作らない）、単一ファイルの圧縮あり
 - **トリミングと ReadyToRun はしない**。WinForms と ASP.NET Core はトリミングに対応していない。ReadyToRun はサイズがおよそ 2 倍になる
 - フレームワークの衛星リソースアセンブリは英語のみ（UI 文言はアプリ内の文字列のため）。Release ビルドはシンボルを含めない
@@ -443,7 +443,10 @@ tests/Hatoclip.Tests/    単体テスト・HTTP API のテスト
 tools/                   publish.ps1、make-tray-icons.ps1、make-web-icons.ps1
 docs/design.md           この設計メモ
 docs/shortcut.md         iOS ショートカットの作り方
+site/                    紹介ページ（https://kn0kyt.github.io/hatoclip/。素の HTML/CSS、外部読み込みなし。画像は架空のデータで撮影）
+.github/workflows/pages.yml  site/ を GitHub Pages に公開する（main への push で site/ かこのファイルが変わったとき、または手動）
 README.md                利用者向け説明
+LICENSE                  Hatoclip のライセンス（MIT）
 THIRD-PARTY-NOTICES.txt  同梱ソフトウェアのライセンス表示
 global.json              テストランナーの指定
 Hatoclip.sln

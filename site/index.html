@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4f6fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12161d" media="(prefers-color-scheme: dark)">
+  <title>Hatoclip – スマホと PC のあいだを、鳩がテキストを運びます</title>
+  <meta name="description" content="Hatoclip（ハトクリップ）は、同じ Wi-Fi にあるスマホと Windows PC のあいだで、コピーしたテキストをやり取りするアプリです。スマホは PC の QR コードを読むだけで、アプリのインストールは不要です。">
+  <link rel="canonical" href="https://kn0kyt.github.io/hatoclip/">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:site_name" content="Hatoclip">
+  <meta property="og:title" content="Hatoclip – スマホと PC のあいだを、鳩がテキストを運びます">
+  <meta property="og:description" content="同じ Wi-Fi のスマホと Windows PC で、コピーしたテキストをやり取り。スマホは QR コードを読むだけ、アプリ不要です。">
+  <meta property="og:url" content="https://kn0kyt.github.io/hatoclip/">
+  <meta property="og:image" content="https://kn0kyt.github.io/hatoclip/img/ogp.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="鳩のマークと「Hatoclip」の文字。スマホと PC のあいだを、鳩がテキストを運びます">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Hatoclip – スマホと PC のあいだを、鳩がテキストを運びます">
+  <meta name="twitter:description" content="同じ Wi-Fi のスマホと Windows PC で、コピーしたテキストをやり取り。スマホは QR コードを読むだけ、アプリ不要です。">
+  <meta name="twitter:image" content="https://kn0kyt.github.io/hatoclip/img/ogp.png">
+</head>
+<body>
+  <!-- Pigeon mark: same silhouette as the app's tray icon and phone page (48x48 grid). -->
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="pigeon" viewBox="0 0 48 48">
+      <g style="fill: var(--pigeon-body)">
+        <polygon points="13,30 2,35.5 4,37 10,37.5 18,37"/>
+        <ellipse cx="24" cy="29.5" rx="15" ry="10"/>
+        <path d="M30,10 Q23,17 14,23.5 L30,34 L38.5,27 Q41.5,23 41,19 Z"/>
+        <circle cx="35" cy="15.5" r="7.5"/>
+      </g>
+      <ellipse cx="24" cy="28" rx="9.8" ry="5" style="fill: var(--pigeon-wing)"/>
+      <polygon points="41.5,14.5 47,16.5 41.5,18.5" style="fill: var(--pigeon-beak)"/>
+      <circle cx="36.5" cy="14.5" r="2.4" style="fill: #ffffff"/>
+      <circle cx="37" cy="14.5" r="1" style="fill: #1d2433"/>
+    </symbol>
+  </svg>
+
+  <a class="skip" href="#main">本文へ移動</a>
+
+  <header class="site-header">
+    <div class="wrap site-header-inner">
+      <a class="brand" href="./" aria-label="Hatoclip トップ">
+        <svg class="brand-mark" aria-hidden="true" focusable="false"><use href="#pigeon"/></svg>
+        <span>Hatoclip</span>
+      </a>
+      <nav class="nav" aria-label="ページ内">
+        <a href="#steps">使い方</a>
+        <a href="#features">できること</a>
+        <a href="#safety">安心のために</a>
+        <a href="#start">ダウンロード</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero-inner">
+        <div class="hero-text">
+          <svg class="hero-mark" aria-hidden="true" focusable="false"><use href="#pigeon"/></svg>
+          <h1 id="hero-title">Hatoclip</h1>
+          <p class="tagline">スマホと PC のあいだを、<wbr>鳩がテキストを運びます</p>
+          <p class="lead">同じ Wi-Fi にあるスマホと Windows PC で、コピーしたテキストをやり取りするアプリです。スマホは PC に出る QR コードを読むだけ。アプリのインストールはいりません。</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://github.com/kn0kyt/hatoclip/releases/latest">
+              <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              ダウンロード（Windows 10 / 11）
+            </a>
+            <a class="btn btn-secondary" href="https://github.com/kn0kyt/hatoclip">GitHub で見る</a>
+          </div>
+          <p class="fine">無料・インストーラーなし（exe 1 つ）・管理者権限は不要です</p>
+        </div>
+
+        <div class="hero-visual">
+          <figure class="shots">
+            <picture class="shot-pc">
+              <source srcset="img/pc-window-dark.png" media="(prefers-color-scheme: dark)" width="746" height="655">
+              <img src="img/pc-window-light.png" width="746" height="655" alt="PC の「接続用QRコード」の画面。QR コード、「ネットワーク: プライベート ✓」、「✓ スマホが接続しました」と、接続用の URL が表示されている">
+            </picture>
+            <div class="phone">
+              <picture>
+                <source srcset="img/phone-dark.png" media="(prefers-color-scheme: dark)" width="780" height="1688">
+                <img src="img/phone-light.png" width="780" height="1688" alt="スマホのブラウザで開いた Hatoclip のページ。「MY-PC に接続中」と表示され、PC から取得したテキストと「PCに届けました」が見えている">
+              </picture>
+            </div>
+            <figcaption class="visually-hidden">左が PC の画面、右がスマホの画面です（画面の名前やアドレスは例です）。</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="steps" class="section" aria-labelledby="steps-title">
+      <div class="wrap">
+        <h2 id="steps-title" class="section-title">3 ステップで、鳩が飛び立ちます</h2>
+        <p class="section-lead">最初に 1 回つなげば、次からはページを開くだけです。</p>
+        <ol class="steps">
+          <li class="card step">
+            <div class="step-art art-tray" aria-hidden="true">
+              <div class="tray-tip">Hatoclip</div>
+              <div class="tray-bar">
+                <span class="tray-chevron"></span>
+                <svg class="tray-icon" focusable="false"><use href="#pigeon"/></svg>
+                <span class="tray-clock">10:00</span>
+              </div>
+            </div>
+            <h3><span class="step-num" aria-hidden="true">1</span>PC で起動する</h3>
+            <p><code>Hatoclip.exe</code> をダブルクリックします。タスクトレイに鳩のアイコンが出て、最初は QR コードの画面が開きます。</p>
+          </li>
+          <li class="card step">
+            <div class="step-art art-qr">
+              <picture>
+                <source srcset="img/step-qr-dark.png" media="(prefers-color-scheme: dark)" width="480" height="480">
+                <img src="img/step-qr-light.png" width="480" height="480" loading="lazy" alt="PC の画面に表示される接続用の QR コード">
+              </picture>
+            </div>
+            <h3><span class="step-num" aria-hidden="true">2</span>スマホで QR を読む</h3>
+            <p>スマホのカメラで QR コードを読み取り、出てきたリンクを開きます。「（PC名）に接続中」と出れば準備完了です。</p>
+          </li>
+          <li class="card step">
+            <div class="step-art art-send">
+              <picture>
+                <source srcset="img/step-send-dark.png" media="(prefers-color-scheme: dark)" width="680" height="190">
+                <img src="img/step-send-light.png" width="680" height="190" loading="lazy" alt="スマホのページの「PCに送信」ボタンと、「PCに届けました」の表示">
+              </picture>
+            </div>
+            <h3><span class="step-num" aria-hidden="true">3</span>送る・受け取る</h3>
+            <p>テキストを貼って「PCに送信」。PC では <kbd>Ctrl</kbd>+<kbd>V</kbd> で貼り付けられます。PC でコピーしたものは「PCのクリップボードを取得」で受け取れます。</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="features" class="section section-alt" aria-labelledby="features-title">
+      <div class="wrap">
+        <h2 id="features-title" class="section-title">できること</h2>
+        <ul class="features">
+          <li class="card feature">
+            <h3>スマホ → PC に送る</h3>
+            <p>スマホで貼り付けて「PCに送信」。PC のクリップボードに入り、「鳩がテキストを届けました」と通知が出ます。</p>
+          </li>
+          <li class="card feature">
+            <h3>PC → スマホに取ってくる</h3>
+            <p>PC でコピーしておき、スマホで「PCのクリップボードを取得」。表示されたテキストを「コピー」できます。</p>
+          </li>
+          <li class="card feature">
+            <h3>スマホにアプリは不要</h3>
+            <p>使うのはブラウザで開くページだけ。iPhone はもちろん、Android でも使えます。</p>
+          </li>
+          <li class="card feature">
+            <h3>ホーム画面に置ける</h3>
+            <p>Safari の「ホーム画面に追加」で、アプリのように開けます（最初に接続キーの貼り付けが必要です）。</p>
+          </li>
+          <li class="card feature">
+            <h3>iOS ショートカット（任意）</h3>
+            <p>iPhone の「ショートカット」アプリから、ページを開かずに送受信することもできます。背面タップにも割り当てられます。</p>
+          </li>
+          <li class="card feature">
+            <h3>ダークモード</h3>
+            <p>PC の画面も、スマホのページも、それぞれの設定に合わせて明るい色・暗い色で表示します。</p>
+          </li>
+          <li class="card feature">
+            <h3>自動で起動</h3>
+            <p>トレイメニューの「Windows起動時に自動起動」にチェックを入れると、サインインしたときに起動します。</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="safety" class="section" aria-labelledby="safety-title">
+      <div class="wrap">
+        <h2 id="safety-title" class="section-title">安心して使うために</h2>
+        <p class="section-lead">鳩は家の Wi-Fi の中だけを行き来します。</p>
+        <div class="safety">
+          <div class="card safety-card">
+            <h3>Hatoclip が守っていること</h3>
+            <ul class="checks">
+              <li><strong>同じ Wi-Fi の中だけ</strong>で通信します。インターネット上のサーバーは使いません</li>
+              <li><strong>外部との通信はしません</strong>。更新チェックや利用状況の送信もありません</li>
+              <li>スマホからの操作には<strong>接続キー</strong>（QR コードに入っています）が必要です。キーを知らない端末からは使えません</li>
+              <li><strong>管理者権限はいりません</strong>。ファイアウォールなどの設定を勝手に変えることもありません</li>
+              <li>ログに<strong>クリップボードの内容や接続キーは残しません</strong></li>
+              <li>スマホが PC のクリップボードを取得すると、トレイの鳩アイコンが数秒だけ変わるので気付けます</li>
+              <li><strong>ソースコードを公開</strong>しています</li>
+            </ul>
+          </div>
+          <div class="card safety-card safety-limits">
+            <h3>知っておいてほしいこと</h3>
+            <ul class="notes">
+              <li><strong>テキストだけ</strong>です。画像やファイルは送れません</li>
+              <li>通信は HTTPS ではなく、<strong>暗号化されない HTTP</strong> です。カフェなど<strong>信頼できない Wi-Fi では使わないでください</strong></li>
+              <li>コード署名をしていないため、初回は <strong>Windows の SmartScreen</strong>（青い画面）が出ることがあります。「詳細情報」→「実行」で起動できます（<a href="https://github.com/kn0kyt/hatoclip#インストール">README の説明</a>）</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="start" class="section section-alt" aria-labelledby="start-title">
+      <div class="wrap">
+        <h2 id="start-title" class="section-title">使うまでの流れ</h2>
+        <div class="start">
+          <div class="card requirements">
+            <h3>動作環境</h3>
+            <dl class="req">
+              <div><dt>PC</dt><dd>Windows 10 / 11（x64 / arm64）</dd></div>
+              <div><dt>スマホ</dt><dd>カメラとブラウザがある iPhone または Android</dd></div>
+              <div><dt>ネットワーク</dt><dd>PC とスマホが同じ Wi-Fi（同じルーター）につながっていること。ゲスト用 Wi-Fi では使えません</dd></div>
+            </dl>
+            <p class="small">arm64 版は実機での動作確認をしていません。PC がスリープしている間は使えません。</p>
+          </div>
+          <div class="card install">
+            <h3>インストール</h3>
+            <ol class="flow">
+              <li>Releases のページから <code>Hatoclip-<var>バージョン</var>-win-x64.zip</code> をダウンロードします（ARM 版 Windows は <code>win-arm64</code>）</li>
+              <li>zip を開き、中の <code>Hatoclip.exe</code> を好きなフォルダーに置きます</li>
+              <li><code>Hatoclip.exe</code> をダブルクリックして起動します</li>
+              <li>ファイアウォールの確認が出たら「プライベート ネットワーク」にチェックを入れ、「アクセスを許可する」を押します</li>
+              <li>表示された QR コードをスマホで読み取れば完了です</li>
+            </ol>
+            <div class="actions">
+              <a class="btn btn-primary" href="https://github.com/kn0kyt/hatoclip/releases/latest">
+                <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                ダウンロード（Windows 10 / 11）
+              </a>
+            </div>
+            <p class="small">詳しい手順やつながらないときの確認方法は <a href="https://github.com/kn0kyt/hatoclip#readme">README</a> にあります。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <nav aria-label="資料">
+        <ul class="footer-links">
+          <li><a href="https://github.com/kn0kyt/hatoclip#readme">README（使い方）</a></li>
+          <li><a href="https://github.com/kn0kyt/hatoclip/blob/main/docs/design.md">設計メモ</a></li>
+          <li><a href="https://github.com/kn0kyt/hatoclip/blob/main/docs/shortcut.md">ショートカットの作り方</a></li>
+          <li><a href="https://github.com/kn0kyt/hatoclip/blob/main/THIRD-PARTY-NOTICES.txt">サードパーティーのライセンス表示</a></li>
+          <li><a href="https://github.com/kn0kyt/hatoclip/blob/main/LICENSE">ライセンス</a></li>
+          <li><a href="https://github.com/kn0kyt/hatoclip">GitHub</a></li>
+        </ul>
+      </nav>
+      <p class="footer-note">
+        <svg class="footer-mark" aria-hidden="true" focusable="false"><use href="#pigeon"/></svg>
+        鳩は LAN の外へは飛びません。
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

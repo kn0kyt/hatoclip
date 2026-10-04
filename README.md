@@ -1,5 +1,7 @@
 # 🕊️ Hatoclip（ハトクリップ）
 
+紹介ページ：<https://kn0kyt.github.io/hatoclip/>
+
 ## Hatoclip とは
 
 スマホと Windows PC のあいだで、コピーしたテキストを鳩（はと）が届けてくれるアプリです。
@@ -17,9 +19,9 @@ PC で動かしておけば、スマホは PC に表示される QR コードを
 
 ## インストール
 
-1. `Hatoclip-<バージョン>-win-x64.zip` をダウンロードします（Surface Pro X などの ARM 版 Windows では `win-arm64` を選んでください）
+1. [Releases のページ](https://github.com/kn0kyt/hatoclip/releases/latest) から `Hatoclip-<バージョン>-win-x64.zip` をダウンロードします（Surface Pro X などの ARM 版 Windows では `win-arm64` を選んでください）
 2. zip を開き、中の `Hatoclip.exe` を好きなフォルダーに置きます（例：`C:\Users\<ユーザー名>\Hatoclip`）
-   - zip に一緒に入っている `THIRD-PARTY-NOTICES.txt` は、Hatoclip に組み込まれているソフトウェア（.NET、QRCoder）のライセンス表示です。動かすのに必要なファイルではありません
+   - zip に一緒に入っている `LICENSE.txt` は Hatoclip のライセンス、`THIRD-PARTY-NOTICES.txt` は Hatoclip に組み込まれているソフトウェア（.NET、QRCoder）のライセンス表示です。動かすのに必要なファイルではありません
 3. `Hatoclip.exe` をダブルクリックします
 
 ### 「Windows によって PC が保護されました」と表示されたら
@@ -196,7 +198,7 @@ Hatoclip は PC のクリップボードに入れるだけで、自動では貼�
 - テスト：`dotnet test`（リポジトリのルートで実行。xUnit v3 を `global.json` で有効にした Microsoft.Testing.Platform で動かします。LAN や実際のクリップボードは使いません）
 - 配布用 exe：`powershell -ExecutionPolicy Bypass -File tools\publish.ps1`
   - `publish\win-x64\Hatoclip.exe`、`publish\win-arm64\Hatoclip.exe`（self-contained の単一ファイル）と、それぞれの zip を作ります
-  - zip には `Hatoclip.exe` と `THIRD-PARTY-NOTICES.txt`（同梱している .NET ランタイムと QRCoder のライセンス表示）が入ります
+  - zip には `Hatoclip.exe`、`LICENSE.txt`、`THIRD-PARTY-NOTICES.txt`（同梱している .NET ランタイムと QRCoder のライセンス表示）が入ります
   - 1 つだけなら `dotnet publish src/Hatoclip/Hatoclip.csproj -p:PublishProfile=win-x64`
 
 ```
@@ -207,9 +209,11 @@ tests/Hatoclip.Tests/  単体テスト・HTTP API のテスト（xUnit）
 tools/                 publish.ps1、アイコン生成スクリプト
 docs/design.md         設計メモ
 docs/shortcut.md       iOS ショートカットの作り方
+site/                  紹介ページ（GitHub Pages。.github/workflows/pages.yml で公開）
+LICENSE                Hatoclip のライセンス（MIT。zip に LICENSE.txt として入れて配布）
 THIRD-PARTY-NOTICES.txt 同梱ソフトウェアのライセンス表示（zip に入れて配布）
 global.json            テストランナーの指定
 ```
 
 - 設計メモ：[docs/design.md](docs/design.md)
-- ライセンス：未定
+- ライセンス：[MIT](LICENSE)（同梱ソフトウェアのライセンスは [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)）
